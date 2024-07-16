@@ -12,6 +12,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// type for storing all game params
 type DiscordBotSettings struct {
 	ApiToken       string
 	GuildId        string // Discord API calls servers "Guilds" for historical reasons
@@ -19,16 +20,48 @@ type DiscordBotSettings struct {
 	GameRegistered bool // true when a server's id and Channel have been stored in the two variables above
 	StoryTellerId  string
 	Players        []string
+	Rooms          map[string]string
 }
+
+// define an enum for room types
+type LocationType int64
+
+const (
+	StoryTellerRoom LocationType = iota // value = position in array
+	TribunalRoom
+	VillageRoom
+	PrivateRoom
+)
+
+type DiscordChannelData struct {
+	ChannelId   string
+	ChannelName string
+	ChannelType LocationType
+}
+
+// globals
 
 var GameSettings DiscordBotSettings
 
+// Maintain a list of 2-char reference codes to the intended room
+var villageCodeLookup = map[string]string{
+	"AP": "Apothecary",
+	"BA": "Bakery",
+	"GR": "Graveyard",
+	"SC": "Storyteller's Corner",
+	"TA": "Tavern",
+	"TS": "Town Square",
+}
+
 // improvement notes
 // - look into registering "slash commands" in discord api rather than clumsy text parsing
+// - look into variable player count
+// - look into dynamically creating the rooms, rather than 'binding' to existing ones
 
+// generic nil check logger
 func checkNilError(e error) {
 	if e != nil {
-		log.Fatal("Error message! Something has gone wrong...")
+		log.Fatalf("Error message! Something has gone wrong... %v", e)
 	}
 }
 
@@ -66,8 +99,14 @@ func extractCommand(discord *discordgo.Session, message *discordgo.MessageCreate
 	case "sitrep": // respond with a high level summary (debug)
 		sitrep(discord, message, bs)
 	case "map": // map players to roles (slots?) - map channels to "village zones"?
-		mapRooms(discord, bs)
-		mapPlayers(discord, bs)
+		if bs.GameRegistered {
+			mapRooms(discord, bs)
+			mapPlayers(discord, bs)
+		} else {
+			// no game registered to map
+			fmt.Println("No game registered")
+			discord.ChannelMessageSendReply(message.ChannelID, "No game registered, this command will not execute", message.Reference())
+		}
 	default: // unparsed command rx
 		fmt.Println("default fall thru")
 		discord.ChannelMessageSend(message.ChannelID, "Huh? WTF is that command?!")
@@ -78,6 +117,42 @@ func extractCommand(discord *discordgo.Session, message *discordgo.MessageCreate
 // Identify and initialise the "rooms" (channel IDs) used within the game
 func mapRooms(discord *discordgo.Session, bs *DiscordBotSettings) {
 
+	fmt.Print(villageCodeLookup)
+
+	bs.Rooms = make(map[string]string)
+
+	// get all channels on the guild instance
+	allChans := getMapGuildChannels(discord, bs.GuildId)
+
+	for index, ch := range allChans {
+		// filter the channels to BotC reserved channels only
+		// note allChans is [id]name indexed i.e. id is the INDEX
+		fmt.Printf("index %s, data %s", index, ch)
+
+		// Iterate through the 'known rooms' list
+		for code, room := range villageCodeLookup {
+			if room == ch {
+				// Add the channelId and the channel shortcode
+				bs.Rooms[index] = code
+			}
+		}
+	}
+
+	discord.ChannelMessageSendTTS(bs.ChannelId, "sup")
+}
+
+// constructs a map of channel id and names for a given GuildId
+func getMapGuildChannels(discord *discordgo.Session, guildId string) map[string]string {
+	channels, err := discord.GuildChannels(guildId)
+	checkNilError(err)
+
+	chanMap := make(map[string]string)
+
+	for _, ch := range channels {
+		chanMap[ch.ID] = ch.Name
+	}
+
+	return chanMap
 }
 
 // Identify the players, and allocate to player slots, and configure "village" permissions?
@@ -138,9 +213,9 @@ func messy(discord *discordgo.Session, message *discordgo.MessageCreate) {
 	var vstest = tempGuild.VoiceStates
 	fmt.Print(vstest)
 
-	for i := 0; i < len(vstest); i++ {
-		fmt.Printf("voice state %d, text %q", i, vstest[i].Member.Nick)
-	}
+	// for i := 0; i < len(vstest); i++ {
+	// 	fmt.Printf("voice state %d, text %q", i, vstest[i].Member.Nick)
+	// }
 
 	// var voicestate, vsError = discord.State.VoiceState(GameSettings.GuildId, message.Author.ID)
 	// checkNilError(vsError)
