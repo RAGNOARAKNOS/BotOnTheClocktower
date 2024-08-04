@@ -20,7 +20,7 @@ type DiscordBotSettings struct {
 	GameRegistered bool // true when a server's id and Channel have been stored in the two variables above
 	StoryTellerId  string
 	Players        []string
-	Rooms          map[string]string
+	Rooms          map[string]string //index RoomShortCode data channelId
 }
 
 // define an enum for room types
@@ -45,12 +45,13 @@ var GameSettings DiscordBotSettings
 
 // Maintain a list of 2-char reference codes to the intended room
 var villageCodeLookup = map[string]string{
-	"AP": "Apothecary",
-	"BA": "Bakery",
-	"GR": "Graveyard",
-	"SC": "Storyteller's Corner",
-	"TA": "Tavern",
 	"TS": "Town Square",
+	"CA": "Cathedral",
+	"CF": "Campfire",
+	"PS": "Potion Shop",
+	"TW": "Tower",
+	"RS": "Riverside",
+	"SC": "Storyteller's Corner",
 }
 
 // improvement notes
@@ -133,11 +134,12 @@ func mapRooms(discord *discordgo.Session, bs *DiscordBotSettings) {
 		for code, room := range villageCodeLookup {
 			if room == ch {
 				// Add the channelId and the channel shortcode
-				bs.Rooms[index] = code
+				bs.Rooms[code] = index
 			}
 		}
 	}
 
+	fmt.Print(bs)
 	discord.ChannelMessageSendTTS(bs.ChannelId, "sup")
 }
 
@@ -157,7 +159,7 @@ func getMapGuildChannels(discord *discordgo.Session, guildId string) map[string]
 
 // Identify the players, and allocate to player slots, and configure "village" permissions?
 func mapPlayers(discord *discordgo.Session, bs *DiscordBotSettings) {
-
+	// TODO
 }
 
 // spit out a summary of the tracked states within the app to chat
