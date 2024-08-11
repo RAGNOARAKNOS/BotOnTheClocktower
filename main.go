@@ -19,7 +19,7 @@ type DiscordBotSettings struct {
 	ChannelId      string
 	GameRegistered bool // true when a server's id and Channel have been stored in the two variables above
 	StoryTellerId  string
-	Players        []string
+	Players        map[string]string //index UserId data UserName
 	Rooms          map[string]string //index RoomShortCode data channelId
 }
 
@@ -93,13 +93,13 @@ func extractCommand(discord *discordgo.Session, message *discordgo.MessageCreate
 	}
 
 	switch rawText[1] {
-	case "ping": // simple liveness check
+	case "ping": // simple liveness check "!botc ping"
 		discord.ChannelMessageSend(message.ChannelID, "pong")
-	case "register": // register a storyteller, guild, and bot-chat channel
+	case "register": // register a storyteller, guild, and bot-chat channel "!botc register"
 		messy(discord, message)
-	case "sitrep": // respond with a high level summary (debug)
+	case "sitrep": // respond with a high level summary (debug) "!botc sitrep"
 		sitrep(discord, message, bs)
-	case "map": // map players to roles (slots?) - map channels to "village zones"?
+	case "map": // map players to roles/slots - map channels to village zones "!botc map"
 		if bs.GameRegistered {
 			mapRooms(discord, bs)
 			mapPlayers(discord, bs)
@@ -108,6 +108,8 @@ func extractCommand(discord *discordgo.Session, message *discordgo.MessageCreate
 			fmt.Println("No game registered")
 			discord.ChannelMessageSendReply(message.ChannelID, "No game registered, this command will not execute", message.Reference())
 		}
+	case "pmove": // move a player to a destination room "!botc pmove PLAYERNAME DESTINATIONCHANNELCODE"
+	case "cmove": // move an entire channel's users to a destination room "!botc cmove SOURCECHANNELCODE DESTINATIONCHANNELCODE"
 	default: // unparsed command rx
 		fmt.Println("default fall thru")
 		discord.ChannelMessageSend(message.ChannelID, "Huh? WTF is that command?!")
@@ -139,8 +141,8 @@ func mapRooms(discord *discordgo.Session, bs *DiscordBotSettings) {
 		}
 	}
 
-	fmt.Print(bs)
-	discord.ChannelMessageSendTTS(bs.ChannelId, "sup")
+	fmt.Print(bs.Rooms)
+	discord.ChannelMessageSendTTS(bs.ChannelId, "Town Locations Mapped")
 }
 
 // constructs a map of channel id and names for a given GuildId
@@ -157,9 +159,58 @@ func getMapGuildChannels(discord *discordgo.Session, guildId string) map[string]
 	return chanMap
 }
 
-// Identify the players, and allocate to player slots, and configure "village" permissions?
+// Identify the players, and allocate to player slots, and configure village permissions?
 func mapPlayers(discord *discordgo.Session, bs *DiscordBotSettings) {
-	// TODO
+	// https://discord.com/channels/118456055842734083/155361364909621248/1271200650499194951
+	// Right, the API is weird - the VoiceStates is only updated in cache data, after an update call
+
+	bs.Players = make(map[string]string) // init the player info
+
+	stateGuildData, err := discord.State.Guild(bs.GuildId) // get the cache guild data (force an update)
+	checkNilError(err)
+
+	channelData, err := discord.Channel(bs.Rooms["TS"]) // get the channel data (for debugging)
+	checkNilError(err)
+
+	voiceData := stateGuildData.VoiceStates
+
+	fmt.Println("*****")
+	fmt.Println(channelData.Name)
+	fmt.Println("VOICES")
+	fmt.Print(voiceData)
+	fmt.Println("*****")
+
+	// List all players in the town square
+	// ST does not get indexed
+	var usersInChannel []string
+
+	for _, voice := range voiceData {
+		if voice.ChannelID == bs.Rooms["TS"] {
+			if voice.UserID != bs.StoryTellerId {
+				usersInChannel = append(usersInChannel, voice.UserID)
+			}
+		}
+	}
+
+	fmt.Print(usersInChannel)
+}
+
+func moveUserToChannel(discord *discordgo.Session, bs *DiscordBotSettings, playerId string, destinationChannelCode string) {
+
+	destChannel := bs.Rooms[destinationChannelCode]
+
+	discord.GuildMemberMove(bs.GuildId, playerId, &destChannel)
+}
+
+// From a given player name, search the players list, return ID or Blank
+func playerNameToId(bs *DiscordBotSettings, playerName string) string {
+	for key, value := range bs.Players {
+		if value == playerName {
+			return key
+		}
+	}
+
+	return "" // couldnt find the name
 }
 
 // spit out a summary of the tracked states within the app to chat
