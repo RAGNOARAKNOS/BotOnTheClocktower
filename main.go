@@ -96,7 +96,7 @@ func extractCommand(discord *discordgo.Session, message *discordgo.MessageCreate
 	case "ping": // simple liveness check "!botc ping"
 		discord.ChannelMessageSend(message.ChannelID, "pong")
 	case "register": // register a storyteller, guild, and bot-chat channel "!botc register"
-		messy(discord, message)
+		register(discord, message)
 	case "sitrep": // respond with a high level summary (debug) "!botc sitrep"
 		sitrep(discord, message, bs)
 	case "map": // map players to roles/slots - map channels to village zones "!botc map"
@@ -174,25 +174,26 @@ func mapPlayers(discord *discordgo.Session, bs *DiscordBotSettings) {
 
 	voiceData := stateGuildData.VoiceStates
 
-	fmt.Println("*****")
-	fmt.Println(channelData.Name)
-	fmt.Println("VOICES")
-	fmt.Print(voiceData)
-	fmt.Println("*****")
-
 	// List all players in the town square
-	// ST does not get indexed
-	var usersInChannel []string
+	var userIdsInChannel []string
+	var userNamesInChannel []string
 
 	for _, voice := range voiceData {
-		if voice.ChannelID == bs.Rooms["TS"] {
+		if voice.ChannelID == bs.Rooms["TS"] { // ST does not get indexed
 			if voice.UserID != bs.StoryTellerId {
-				usersInChannel = append(usersInChannel, voice.UserID)
+				userIdsInChannel = append(userIdsInChannel, voice.UserID)
+				userNamesInChannel = append(userNamesInChannel, voice.Member.Nick)
+				// Observed a weird behaviour - if a user is already connected to the channel when app initialised this property is set to nil causing a segfault
+				// TODO: investigate a better way to populate this? or at least protect against the segfault.
 			}
 		}
 	}
 
-	fmt.Print(usersInChannel)
+	fmt.Println("VOICES")
+	fmt.Println(channelData.Name)
+	fmt.Print(userIdsInChannel)
+	fmt.Print(userNamesInChannel)
+
 }
 
 func moveUserToChannel(discord *discordgo.Session, bs *DiscordBotSettings, playerId string, destinationChannelCode string) {
@@ -219,7 +220,7 @@ func sitrep(discord *discordgo.Session, message *discordgo.MessageCreate, bs *Di
 	var serverstate string
 
 	if bs.GameRegistered {
-		serverstate = fmt.Sprintf("Game is initialised at guildid# %s channel id# %s", bs.GuildId, bs.ChannelId)
+		serverstate = fmt.Sprintf("Game is initialised at guildid# %s channel id# %s storyteller id# %s", bs.GuildId, bs.ChannelId, bs.StoryTellerId)
 	} else {
 		serverstate = "Game is not initialised"
 	}
@@ -229,7 +230,7 @@ func sitrep(discord *discordgo.Session, message *discordgo.MessageCreate, bs *Di
 }
 
 // "register game" tells the bot which server and channel the game is running via
-func messy(discord *discordgo.Session, message *discordgo.MessageCreate) {
+func register(discord *discordgo.Session, message *discordgo.MessageCreate) {
 	GameSettings.GuildId = message.GuildID
 	GameSettings.ChannelId = message.ChannelID
 
