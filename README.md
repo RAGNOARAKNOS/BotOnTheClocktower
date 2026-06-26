@@ -16,7 +16,7 @@ This bot will provide chat commands that can be executed by the Storyteller to m
 
 ## Disclaimer
 
-This is a personal project, and is no way affiliated with "The Pandemonium Institute" who created "Blood On The Clocktower".  I love the game, and recommend you use the official app or better yet buy a physical copy [here](https://bloodontheclocktower.com/).
+This is a personal project, and is no way affiliated with "The Pandemonium Institute" who created "Blood On The Clocktower".  I love the game, and recommend you use the official app or better yet buy a physical copy [of the game here](https://bloodontheclocktower.com/).
 
 ## Notable libraries used
 
@@ -27,10 +27,11 @@ This is a personal project, and is no way affiliated with "The Pandemonium Insti
 
 ### Discord Setup
 
-Register the bot application within your Discord developer page [here](https://discord.com/developers/applications) and make a note of your Discord BOT API token (in the BOT page).
+Register the bot application within your Discord developer page [on the dev page](https://discord.com/developers/applications) and make a note of your Discord BOT API token (in the BOT page).
 
 Assign the Bot the following permissions:
-- 
+
+- TBD
 
 ### Run the executable
 
@@ -53,16 +54,22 @@ BOTAPIKEY=your_discord_bot_token
 Windows
 
 ```powershell
-BotOnTheClocktower.exe 
+go run .\cmd\bot
 ```
 
 Linux
 
 ```shell
-.\BotOnTheClockTower
+go run ./cmd/bot
 ```
 
 The bot will register with your configured Discord channel, and post a message confirming it has initialised and is ready to receive commands.
+
+To build a binary instead of running from source:
+
+```powershell
+go build -o BotOnTheClocktower.exe ./cmd/bot
+```
 
 #### (Alternative) Run the container
 
