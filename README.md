@@ -36,9 +36,19 @@ Assign the Bot the following permissions:
 
 Download the release zip from the GitHub releases page, or build it from source.
 
+If you are building from source, use Go 1.25.0 or newer.
+
 Place application and ENV file into a working directory.
 
 Ammend the ENV file with your Discord API token, you will need to generate this yourself.  Remember to *NOT* store your key in the public domain.
+
+Current environment variables:
+
+```dotenv
+BOTAPIKEY=your_discord_bot_token
+```
+
+- `BOTAPIKEY`: the Discord bot token used when the application connects to the Discord API
 
 Windows
 
