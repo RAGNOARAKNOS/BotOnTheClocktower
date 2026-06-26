@@ -73,9 +73,38 @@ go build -o BotOnTheClocktower.exe ./cmd/bot
 
 #### (Alternative) Run the container
 
+Container images are published to the GitHub Container Registry (ghcr.io) for
+every GitHub Release. Supply the `BOTAPIKEY` as an environment variable (no
+`.env` file is required inside the container):
+
 ```shell
-docker run -d <TBD>
+docker run -d -e BOTAPIKEY=your_discord_bot_token ghcr.io/ragnoaraknos/botontheclocktower:latest
 ```
+
+Replace `latest` with a specific version tag (e.g. `v1.0`) to pin a release.
+
+## Releases & CI/CD
+
+This repository uses GitHub Actions to automate builds and container packaging:
+
+- **Release build** (`.github/workflows/release.yml`): triggered when a tag
+  matching `v*` (e.g. `v1.0`) is pushed. It runs the tests, cross-compiles the
+  Linux and Windows (amd64) binaries, and publishes a GitHub Release with those
+  binaries attached as assets.
+- **Container image** (`.github/workflows/container.yml`): triggered separately
+  when a Release is published. It builds the container image and pushes it to
+  `ghcr.io/<owner>/botontheclocktower`, tagged with the release version and
+  `latest`.
+
+To cut a release:
+
+```shell
+git tag v1.0
+git push origin v1.0
+```
+
+Pushing the tag publishes the GitHub Release (with binaries), which in turn
+triggers the container image build and push.
 
 ## Features
 

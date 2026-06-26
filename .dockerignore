@@ -1,0 +1,23 @@
+# Version control and CI
+.git
+.gitignore
+.github
+
+# Local secrets and environment
+.env
+
+# Build artifacts and binaries
+*.exe
+*.exe~
+__debug_bin*
+/out
+
+# Docs and assets not needed for the build
+README.md
+LICENSE
+*.svg
+*.png
+
+# Session/editor noise
+.vscode
+.idea
