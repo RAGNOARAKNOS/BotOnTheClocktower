@@ -29,19 +29,26 @@ This is a personal project, and is no way affiliated with "The Pandemonium Insti
 
 Register the bot application within your Discord developer page [on the dev page](https://discord.com/developers/applications) and make a note of your Discord BOT API token (in the BOT page).
 
+The bot requests all gateway intents, so on the BOT page you must enable all three **Privileged Gateway Intents** (Presence, Server Members and Message Content). If you don't, Discord refuses the connection, and without Message Content the bot can't read commands.
+
 Assign the Bot the following permissions:
 
-- TBD
+- View Channels
+- Send Messages
+- Send TTS Messages (used by `!botc map`)
+- Read Message History (needed to reply to a message)
+- Connect (used by `!botc register`)
+- Move Members (needed for the planned player-moving commands)
 
 ### Run the executable
 
-Download the release zip from the GitHub releases page, or build it from source.
+Download the binary for your platform (Linux or Windows, amd64) from the GitHub releases page, or build it from source.
 
 If you are building from source, use Go 1.27.1 or newer.
 
-Place application and ENV file into a working directory.
+Place the application and a `.env` file into a working directory.
 
-Ammend the ENV file with your Discord API token, you will need to generate this yourself.  Remember to *NOT* store your key in the public domain.
+Amend the `.env` file with your Discord API token, you will need to generate this yourself.  Remember to *NOT* store your key in the public domain.
 
 Current environment variables:
 
@@ -63,7 +70,7 @@ Linux
 go run ./cmd/bot
 ```
 
-The bot will register with your configured Discord channel, and post a message confirming it has initialised and is ready to receive commands.
+Once connected, the bot prints `Bot is ready` to the console and listens for commands in every server it has been invited to. It doesn't post anything to Discord at startup. To set up a game, send `!botc register` in the channel you want to use (see [Commands](#commands)). Press Ctrl+C to stop the bot.
 
 To build a binary instead of running from source:
 
@@ -106,6 +113,33 @@ git push origin v1.0
 Pushing the tag publishes the GitHub Release (with binaries), which in turn
 triggers the container image build and push.
 
+## Commands
+
+Every command starts with `!botc`, followed by the command name, e.g. `!botc ping`. Send them in a text channel on the server where the game is being played.
+
+| Command | What it does |
+| --- | --- |
+| `!botc ping` | Replies `pong`. Use it to check the bot is online. |
+| `!botc register` | Registers the current server and channel as the game's location and tries to join that channel's voice. Run this before any other game command. |
+| `!botc sitrep` | Reports whether a game is registered and, if so, the server, channel and Storyteller IDs. |
+| `!botc map` | Finds the village's voice channels by name and posts "Town Locations Mapped". It then lists the players in Town Square, but only to the bot's console for now. Requires `register` first. |
+
+Any other `!botc` command gets a "Huh? WTF is that command?!" reply.
+
+For `!botc map`, the voice channels must use these exact names:
+
+| Code | Channel name |
+| --- | --- |
+| `TS` | Town Square |
+| `CA` | Cathedral |
+| `CF` | Campfire |
+| `PS` | Potion Shop |
+| `TW` | Tower |
+| `RS` | Riverside |
+| `SC` | Storyteller's Corner |
+
+Game state is kept in memory only. If the bot restarts, run `!botc register` and `!botc map` again.
+
 ## Features
 
 (Ordered by development priority)
@@ -115,19 +149,21 @@ triggers the container image build and push.
 Status: IN WORK
 
 ```shell
-!gather
+!botc gather
 ```
 
 During the NIGHT phase, all players are placed into individually allocated "Cottage-XX" voice channels.  At the end of the night phase, the Storyteller needs the ability to draw all players into the "Town Square" voice channel for the DAY phase.
 
 Also, at the end of the DAY phase when the town gathers for nominations - *some* players have the tendency to dilly dally in the side channels, this will forceably move the players into "Town Square".
 
+Done so far: game registration (`!botc register`), mapping the village's voice channels (`!botc map`), and an internal helper for moving a player to a channel. Still to do: the `gather` command itself, recording the player list, recognising the Storyteller, and "Cottage-XX" channels. The `pmove` and `cmove` commands are placeholders that currently do nothing.
+
 ### Sending Players to Sleep
 
 Status: PLANNED
 
 ```shell
-!bedtime
+!botc bedtime
 ```
 
 At the end of the DAY phase, all players need to be placed into their respective "Cottage-XX" voice channel.
@@ -135,6 +171,12 @@ At the end of the DAY phase, all players need to be placed into their respective
 ### Village Creation & Destruction
 
 Status: PLANNED
+
+### OBS Integration
+
+Status: PLANNED
+
+Control a local OBS instance from Discord (scene switching, audio and source control, recording), and change scenes automatically as the game moves between phases. See [roadmap.md](roadmap.md) for the plan.
 
 ### Vote tracking?
 
@@ -148,6 +190,6 @@ Status: IDEA
 
 ### Anatomy of a command
 
-<https://www.educative.io/answers/how-to-split-a-string-in-golang>
+Messages are split into words with [`strings.Fields`](https://pkg.go.dev/strings#Fields). If the first word contains `!botc` and there is at least one more word, the second word is the command name, dispatched in `extractCommand` in [internal/bot/bot.go](internal/bot/bot.go). Any further words are available as arguments.
 
-or String "fields" methods <https://pkg.go.dev/strings#Fields>
+<https://www.educative.io/answers/how-to-split-a-string-in-golang>
