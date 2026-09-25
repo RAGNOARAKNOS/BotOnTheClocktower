@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/bwmarrin/discordgo"
@@ -41,6 +43,9 @@ const (
 )
 
 type Bot struct {
+	// mu serialises command handling. discordgo runs each event handler in its
+	// own goroutine, so without it two commands could read and write settings at once.
+	mu       sync.Mutex
 	settings Settings
 	discord  *discordgo.Session
 }
@@ -76,19 +81,28 @@ func Run(settings Settings) error {
 }
 
 func (b *Bot) newMessage(discord *discordgo.Session, message *discordgo.MessageCreate) {
-	if discord.State != nil && discord.State.User != nil && message.Author != nil && message.Author.ID == discord.State.User.ID {
-		fmt.Println("dont talk to myself")
+	// Ignore other bots, including this one.
+	if message.Author == nil || message.Author.Bot {
 		return
 	}
 
 	msgContents := strings.Fields(message.Content)
-	if len(msgContents) < 2 {
+	if len(msgContents) < 2 || !strings.EqualFold(msgContents[0], "!botc") {
 		return
 	}
 
-	if strings.Contains(msgContents[0], "!botc") {
-		b.extractCommand(message, msgContents)
-	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	// A panic in a handler would otherwise crash the whole bot and lose the game.
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("Recovered from panic handling %q: %v\n%s", message.Content, r, debug.Stack())
+			b.discord.ChannelMessageSendReply(message.ChannelID, "Something went wrong running that command. Check the bot's logs.", message.Reference())
+		}
+	}()
+
+	b.extractCommand(message, msgContents)
 }
 
 func (b *Bot) extractCommand(message *discordgo.MessageCreate, rawText []string) {
@@ -96,7 +110,7 @@ func (b *Bot) extractCommand(message *discordgo.MessageCreate, rawText []string)
 		fmt.Printf("MessageParam# %d MessageParamContent %q \n", i, rawText[i])
 	}
 
-	switch rawText[1] {
+	switch strings.ToLower(rawText[1]) {
 	case "ping":
 		b.discord.ChannelMessageSend(message.ChannelID, "pong")
 	case "register", "start":
@@ -107,8 +121,15 @@ func (b *Bot) extractCommand(message *discordgo.MessageCreate, rawText []string)
 		b.sitrep(message)
 	case "map":
 		if b.settings.GameRegistered {
-			b.mapRooms()
-			b.mapPlayers()
+			if err := b.mapRooms(); err != nil {
+				fmt.Printf("Could not map rooms: %v \n", err)
+				b.discord.ChannelMessageSendReply(message.ChannelID, fmt.Sprintf("Could not map the town's channels (%v)", err), message.Reference())
+				return
+			}
+			if err := b.mapPlayers(); err != nil {
+				fmt.Printf("Could not map players: %v \n", err)
+				b.discord.ChannelMessageSendReply(message.ChannelID, fmt.Sprintf("Could not map the players (%v)", err), message.Reference())
+			}
 		} else {
 			fmt.Println("No game registered")
 			b.discord.ChannelMessageSendReply(message.ChannelID, "No game registered, this command will not execute", message.Reference())
@@ -121,12 +142,15 @@ func (b *Bot) extractCommand(message *discordgo.MessageCreate, rawText []string)
 	}
 }
 
-func (b *Bot) mapRooms() {
+func (b *Bot) mapRooms() error {
 	fmt.Print(villageCodeLookup)
 
-	b.settings.Rooms = make(map[string]string)
+	allChans, err := b.getMapGuildChannels(b.settings.GuildId)
+	if err != nil {
+		return err
+	}
 
-	allChans := b.getMapGuildChannels(b.settings.GuildId)
+	b.settings.Rooms = make(map[string]string)
 	for index, ch := range allChans {
 		fmt.Printf("index %s, data %s", index, ch)
 
@@ -139,12 +163,13 @@ func (b *Bot) mapRooms() {
 
 	fmt.Print(b.settings.Rooms)
 	b.discord.ChannelMessageSendTTS(b.settings.AdminChannelId, "Town Locations Mapped")
+	return nil
 }
 
-func (b *Bot) getMapGuildChannels(guildId string) map[string]string {
+func (b *Bot) getMapGuildChannels(guildId string) (map[string]string, error) {
 	channels, err := b.discord.GuildChannels(guildId)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	chanMap := make(map[string]string)
@@ -152,20 +177,20 @@ func (b *Bot) getMapGuildChannels(guildId string) map[string]string {
 		chanMap[ch.ID] = ch.Name
 	}
 
-	return chanMap
+	return chanMap, nil
 }
 
-func (b *Bot) mapPlayers() {
+func (b *Bot) mapPlayers() error {
 	b.settings.Players = make(map[string]string)
 
 	stateGuildData, err := b.discord.State.Guild(b.settings.GuildId)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	channelData, err := b.discord.Channel(b.settings.Rooms["TS"])
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	voiceData := stateGuildData.VoiceStates
@@ -194,6 +219,7 @@ func (b *Bot) mapPlayers() {
 	fmt.Println(channelData.Name)
 	fmt.Print(userIdsInChannel)
 	fmt.Print(userNamesInChannel)
+	return nil
 }
 
 func (b *Bot) moveUserToChannel(playerID string, destinationChannelCode string) {
@@ -354,41 +380,6 @@ func (b *Bot) register(message *discordgo.MessageCreate) {
 		reply += fmt.Sprintf(" Warning: could not assign the %q role (%v). Check the role exists and sits below the bot's role.", storytellerRoleName, err)
 	}
 	b.discord.ChannelMessageSendReply(message.ChannelID, reply, message.Reference())
-
-	for i := 0; i < len(b.discord.State.Guilds); i++ {
-		tempGuild := b.discord.State.Guilds[i]
-		fmt.Printf("Guild# %d GuildID %q GuildName %q \n", i, tempGuild.ID, tempGuild.Name)
-	}
-
-	tempGuild, err := b.discord.State.Guild(b.settings.GuildId)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println("Guild")
-	fmt.Println(tempGuild.Name)
-
-	tempChannel, err := b.discord.Channel(b.settings.AdminChannelId)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println("Channel")
-	fmt.Println(tempChannel.Name)
-
-	tempStateChannel, err := b.discord.State.Channel(b.settings.AdminChannelId)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println("Channel State")
-	fmt.Println(tempStateChannel)
-
-	members := b.discord.State.Guilds[0].Members
-	fmt.Println("Members")
-	fmt.Println(members)
-
-	vstest := tempGuild.VoiceStates
-	fmt.Print(vstest)
-
-	fmt.Println("debug here")
 }
 
 // unregister ends the current game: it removes the game roles from everyone,

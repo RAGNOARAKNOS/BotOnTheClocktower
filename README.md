@@ -165,7 +165,7 @@ triggers the container image build and push.
 
 ## Commands
 
-Every command starts with `!botc`, followed by the command name, e.g. `!botc ping`. Send them in a text channel on the server where the game is being played.
+Every command starts with `!botc`, followed by the command name, e.g. `!botc ping`. Capitals don't matter (`!BotC Start` works). Messages from other bots are ignored. Send them in a text channel on the server where the game is being played.
 
 | Command | What it does |
 | --- | --- |
@@ -250,6 +250,6 @@ Status: IDEA
 
 ### Anatomy of a command
 
-Messages are split into words with [`strings.Fields`](https://pkg.go.dev/strings#Fields). If the first word contains `!botc` and there is at least one more word, the second word is the command name, dispatched in `extractCommand` in [internal/bot/bot.go](internal/bot/bot.go). Any further words are available as arguments.
+Messages are split into words with [`strings.Fields`](https://pkg.go.dev/strings#Fields). If the first word is `!botc` (ignoring case) and there is at least one more word, the second word is the command name, dispatched in `extractCommand` in [internal/bot/bot.go](internal/bot/bot.go). Any further words are available as arguments.
 
 <https://www.educative.io/answers/how-to-split-a-string-in-golang>
