@@ -17,7 +17,7 @@ type Settings struct {
 	ApiToken       string
 	GuildId        string
 	AdminChannelId string // channel register was sent from; admin output goes here
-	GameChannelId  string // Town Square voice channel; the bot joins it and posts game announcements there
+	GameChannelId  string // Town Square voice channel; game announcements go to its text chat
 	GameRegistered bool
 	StoryTellerId  string
 	Players        map[string]string
@@ -366,10 +366,6 @@ func (b *Bot) register(message *discordgo.MessageCreate) {
 	b.settings.StoryTellerId = message.Author.ID
 	b.settings.GameRegistered = true
 
-	if _, err := b.discord.ChannelVoiceJoin(b.settings.GuildId, b.settings.GameChannelId, false, false); err != nil {
-		fmt.Printf("Could not join the game channel voice: %v \n", err)
-	}
-
 	fmt.Printf("The game has been registered at %s admin channel %s game channel %s storyteller %s \n", b.settings.GuildId, b.settings.AdminChannelId, b.settings.GameChannelId, b.settings.StoryTellerId)
 
 	b.discord.ChannelMessageSend(b.settings.GameChannelId, fmt.Sprintf("A new game has begun. <@%s> is the Storyteller.", b.settings.StoryTellerId))
@@ -382,8 +378,8 @@ func (b *Bot) register(message *discordgo.MessageCreate) {
 	b.discord.ChannelMessageSendReply(message.ChannelID, reply, message.Reference())
 }
 
-// unregister ends the current game: it removes the game roles from everyone,
-// leaves voice, and resets the game state so a new game can be registered.
+// unregister ends the current game: it removes the game roles from everyone
+// and resets the game state so a new game can be registered.
 func (b *Bot) unregister(message *discordgo.MessageCreate) {
 	if !b.settings.GameRegistered {
 		b.discord.ChannelMessageSendReply(message.ChannelID, "No game registered, this command will not execute", message.Reference())
@@ -399,12 +395,6 @@ func (b *Bot) unregister(message *discordgo.MessageCreate) {
 	guildID := b.settings.GuildId
 
 	removed, roleErr := b.removeGameRoles(guildID)
-
-	if vc, ok := b.discord.VoiceConnections[guildID]; ok {
-		if err := vc.Disconnect(); err != nil {
-			fmt.Printf("Could not leave voice: %v \n", err)
-		}
-	}
 
 	b.discord.ChannelMessageSend(b.settings.GameChannelId, "The game has ended. Thanks for playing!")
 

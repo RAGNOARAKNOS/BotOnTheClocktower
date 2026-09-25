@@ -45,7 +45,7 @@ In the developer portal, open **OAuth2 → URL Generator**, tick the `bot` scope
 | Send Messages | Reply to commands, and post game announcements in Town Square's text chat |
 | Send TTS Messages | Announce "Town Locations Mapped" in the admin channel after `!botc map` |
 | Read Message History | Reply directly to the command message |
-| Connect | Join the Town Square voice channel on `!botc register` |
+| Connect | Needed alongside Move Members: Discord only lets the bot move someone into a voice channel it could connect to itself. The bot never joins voice |
 | Manage Roles | Give the `BoTC-StoryTeller` role on `!botc register`, and remove the game roles on `!botc unregister` |
 | Move Members | Needed for the planned commands that move players between voice channels |
 
@@ -170,8 +170,8 @@ Every command starts with `!botc`, followed by the command name, e.g. `!botc pin
 | Command | What it does |
 | --- | --- |
 | `!botc ping` | Replies `pong`. Use it to check the bot is online. |
-| `!botc register` or `!botc start` | Starts a game. Makes the current channel the admin channel and the Town Square voice channel the game channel, joins Town Square's voice, and posts a "new game" announcement there. Makes the sender the Storyteller and gives them the `BoTC-StoryTeller` role. Run this before any other game command. Refused if a game is already registered, or if there's no voice channel named `Town Square`. |
-| `!botc unregister` or `!botc end` | Ends the game. Removes `BoTC-StoryTeller` and `BoTC-Player` from every member who has them, posts a "game ended" announcement in Town Square, leaves voice, and clears the game state so a new game can be registered. Only the Storyteller can use it. |
+| `!botc register` or `!botc start` | Starts a game. Makes the current channel the admin channel and the Town Square voice channel the game channel, and posts a "new game" announcement in Town Square's text chat. Makes the sender the Storyteller and gives them the `BoTC-StoryTeller` role. Run this before any other game command. Refused if a game is already registered, or if there's no voice channel named `Town Square`. |
+| `!botc unregister` or `!botc end` | Ends the game. Removes `BoTC-StoryTeller` and `BoTC-Player` from every member who has them, posts a "game ended" announcement in Town Square, and clears the game state so a new game can be registered. Only the Storyteller can use it. |
 | `!botc sitrep` | Reports whether a game is registered and, if so, the server, the admin and game channels, and the Storyteller. |
 | `!botc map` | Finds the village's voice channels by name and posts "Town Locations Mapped" in the admin channel. It then lists the players in Town Square, but only to the bot's console for now. Requires `register` first. |
 
@@ -184,7 +184,7 @@ Any other `!botc` command gets a "Huh? WTF is that command?!" reply.
 A game uses two channels:
 
 - **Admin channel:** the channel the Storyteller sends `!botc register` from. Admin output, such as the `!botc map` announcement, goes here. A private text channel only the Storyteller and moderators can see works well.
-- **Game channel:** the `Town Square` voice channel. The bot joins its voice, and posts game announcements (game started, game ended) in its text chat. It must exist before `!botc register`.
+- **Game channel:** the `Town Square` voice channel. The bot posts game announcements (game started, game ended) in its text chat. It doesn't join the voice channel. It must exist before `!botc register`.
 
 For `!botc register` and `!botc map`, the voice channels must use these exact names:
 
