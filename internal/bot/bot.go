@@ -1,6 +1,7 @@
 package bot
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -34,7 +35,7 @@ var villageCodeLookup = map[string]string{
 const (
 	// storytellerRoleName is given to the user who registers the game.
 	storytellerRoleName = "BoTC-StoryTeller"
-	// playerRoleName marks players in the game. Not used by any command yet.
+	// playerRoleName marks players in the game. Only removed (on unregister), never assigned, by the bot.
 	playerRoleName = "BoTC-Player"
 )
 
@@ -97,8 +98,10 @@ func (b *Bot) extractCommand(message *discordgo.MessageCreate, rawText []string)
 	switch rawText[1] {
 	case "ping":
 		b.discord.ChannelMessageSend(message.ChannelID, "pong")
-	case "register":
+	case "register", "start":
 		b.register(message)
+	case "unregister", "end":
+		b.unregister(message)
 	case "sitrep":
 		b.sitrep(message)
 	case "map":
@@ -207,20 +210,83 @@ func (b *Bot) playerNameToId(playerName string) string {
 	return ""
 }
 
+// findRoleID returns the ID of the server's role with exactly this name.
+func (b *Bot) findRoleID(guildID, roleName string) (string, error) {
+	roles, err := b.discord.GuildRoles(guildID)
+	if err != nil {
+		return "", err
+	}
+
+	for _, role := range roles {
+		if role.Name == roleName {
+			return role.ID, nil
+		}
+	}
+
+	return "", fmt.Errorf("no role named %q in this server", roleName)
+}
+
 // assignStorytellerRole gives the user the server's existing storytellerRoleName role.
 func (b *Bot) assignStorytellerRole(guildID, userID string) error {
-	roles, err := b.discord.GuildRoles(guildID)
+	roleID, err := b.findRoleID(guildID, storytellerRoleName)
 	if err != nil {
 		return err
 	}
 
-	for _, role := range roles {
-		if role.Name == storytellerRoleName {
-			return b.discord.GuildMemberRoleAdd(guildID, userID, role.ID)
+	return b.discord.GuildMemberRoleAdd(guildID, userID, roleID)
+}
+
+// removeGameRoles takes the Storyteller and Player roles off every member of the
+// server who has them, including roles given out by hand. It returns how many
+// roles were removed, and keeps going past individual failures.
+func (b *Bot) removeGameRoles(guildID string) (int, error) {
+	var errs []error
+
+	gameRoleIDs := make(map[string]bool)
+	for _, roleName := range []string{storytellerRoleName, playerRoleName} {
+		roleID, err := b.findRoleID(guildID, roleName)
+		if err != nil {
+			errs = append(errs, err)
+			continue
 		}
+		gameRoleIDs[roleID] = true
 	}
 
-	return fmt.Errorf("no role named %q in this server", storytellerRoleName)
+	if len(gameRoleIDs) == 0 {
+		return 0, errors.Join(errs...)
+	}
+
+	// Discord returns at most 1000 members per request, so page through them.
+	const pageSize = 1000
+	removed := 0
+	after := ""
+	for {
+		members, err := b.discord.GuildMembers(guildID, after, pageSize)
+		if err != nil {
+			errs = append(errs, err)
+			break
+		}
+
+		for _, member := range members {
+			for _, roleID := range member.Roles {
+				if !gameRoleIDs[roleID] {
+					continue
+				}
+				if err := b.discord.GuildMemberRoleRemove(guildID, member.User.ID, roleID); err != nil {
+					errs = append(errs, fmt.Errorf("removing role from %s: %w", member.User.Username, err))
+					continue
+				}
+				removed++
+			}
+		}
+
+		if len(members) < pageSize {
+			break
+		}
+		after = members[len(members)-1].User.ID
+	}
+
+	return removed, errors.Join(errs...)
 }
 
 func (b *Bot) sitrep(message *discordgo.MessageCreate) {
@@ -293,4 +359,45 @@ func (b *Bot) register(message *discordgo.MessageCreate) {
 	fmt.Print(vstest)
 
 	fmt.Println("debug here")
+}
+
+// unregister ends the current game: it removes the game roles from everyone,
+// leaves voice, and resets the game state so a new game can be registered.
+func (b *Bot) unregister(message *discordgo.MessageCreate) {
+	if !b.settings.GameRegistered {
+		b.discord.ChannelMessageSendReply(message.ChannelID, "No game registered, this command will not execute", message.Reference())
+		return
+	}
+
+	if message.GuildID != b.settings.GuildId || message.Author.ID != b.settings.StoryTellerId {
+		reply := fmt.Sprintf("Only the Storyteller (<@%s>) can end the game, from the server it was registered in. This command will not execute", b.settings.StoryTellerId)
+		b.discord.ChannelMessageSendReply(message.ChannelID, reply, message.Reference())
+		return
+	}
+
+	guildID := b.settings.GuildId
+
+	removed, roleErr := b.removeGameRoles(guildID)
+
+	if vc, ok := b.discord.VoiceConnections[guildID]; ok {
+		if err := vc.Disconnect(); err != nil {
+			fmt.Printf("Could not leave voice: %v \n", err)
+		}
+	}
+
+	b.settings.GuildId = "UNSET"
+	b.settings.ChannelId = "UNSET"
+	b.settings.StoryTellerId = "UNSET"
+	b.settings.GameRegistered = false
+	b.settings.Players = nil
+	b.settings.Rooms = nil
+
+	fmt.Printf("The game at %s has been unregistered, %d game roles removed \n", guildID, removed)
+
+	reply := fmt.Sprintf("Game ended. Removed %d game role(s).", removed)
+	if roleErr != nil {
+		fmt.Printf("Problems removing game roles: %v \n", roleErr)
+		reply += fmt.Sprintf(" Warning: some roles could not be removed (%v). Check the %q and %q roles exist and sit below the bot's role.", roleErr, storytellerRoleName, playerRoleName)
+	}
+	b.discord.ChannelMessageSendReply(message.ChannelID, reply, message.Reference())
 }

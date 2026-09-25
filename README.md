@@ -46,7 +46,7 @@ In the developer portal, open **OAuth2 → URL Generator**, tick the `bot` scope
 | Send TTS Messages | Announce "Town Locations Mapped" after `!botc map` |
 | Read Message History | Reply directly to the command message |
 | Connect | Join the game channel's voice on `!botc register` |
-| Manage Roles | Give the `BOTC-StoryTeller` role on `!botc register` |
+| Manage Roles | Give the `BoTC-StoryTeller` role on `!botc register`, and remove the game roles on `!botc unregister` |
 | Move Members | Needed for the planned commands that move players between voice channels |
 
 When the bot joins, Discord automatically creates a role with the bot's name that holds these permissions. Don't delete it.
@@ -57,10 +57,10 @@ The bot uses two roles that must already exist on the server. It doesn't create 
 
 | Role | Purpose |
 | --- | --- |
-| `BOTC-StoryTeller` | Given to whoever runs `!botc register` |
-| `BOTC-Player` | Marks players in the game. Not used by any command yet |
+| `BoTC-StoryTeller` | Given to whoever runs `!botc register`, removed on `!botc unregister` |
+| `BoTC-Player` | Marks players in the game. Give it out by hand for now; it's removed from everyone on `!botc unregister` |
 
-The bot doesn't need either role to have any permissions. What you give them is up to you. Useful options for `BOTC-StoryTeller` are Move Members, Mute Members, Deafen Members and Priority Speaker.
+The bot doesn't need either role to have any permissions. What you give them is up to you. Useful options for `BoTC-StoryTeller` are Move Members, Mute Members, Deafen Members and Priority Speaker.
 
 #### 3. Put the roles in the right order
 
@@ -69,13 +69,14 @@ Discord only lets a bot give out roles that sit **below its own highest role**. 
 ```text
 Admin / Moderator roles     <- keep these above the bot
 BotOnTheClocktower          <- the bot's own role
-BOTC-StoryTeller            <- must be below the bot's role
-BOTC-Player                 <- must be below the bot's role
+BoTC-StoryTeller            <- must be below the bot's role
+BoTC-Player                 <- must be below the bot's role
 Other member roles
 @everyone
 ```
 
-- If `BOTC-StoryTeller` is above the bot's role, registration still succeeds, but the bot can't give out the role. It replies with a warning instead.
+- If `BoTC-StoryTeller` is above the bot's role, registration still succeeds, but the bot can't give out the role. It replies with a warning instead.
+- Likewise, if either game role is above the bot's role, `!botc unregister` still ends the game, but can't remove that role and replies with a warning.
 - Manage Roles lets the bot give out **any** role below its own. Keep moderator and admin roles above the bot's role so it can never hand them out.
 
 #### 4. Check channel overrides
@@ -84,9 +85,10 @@ Per-channel permission overrides take priority over server-wide permissions. Mak
 
 #### Who becomes Storyteller
 
-- Whoever sends `!botc register` becomes the Storyteller for that game and is given the `BOTC-StoryTeller` role.
+- Whoever sends `!botc register` becomes the Storyteller for that game and is given the `BoTC-StoryTeller` role.
 - The bot runs one game at a time. Once a game is registered, `!botc register` is refused for everyone, including the current Storyteller.
-- To start a new game or change Storyteller, restart the bot. The bot never removes the `BOTC-StoryTeller` role, so a moderator has to take it off the previous Storyteller by hand.
+- To end the game, the Storyteller sends `!botc unregister` (or `!botc end`). This removes `BoTC-StoryTeller` and `BoTC-Player` from every member who has them, not just the ones the bot gave out. After that, anyone can register a new game.
+- Only the Storyteller can end the game. If they're unavailable, restart the bot and have a moderator remove the game roles by hand.
 
 ### Run the executable
 
@@ -168,7 +170,8 @@ Every command starts with `!botc`, followed by the command name, e.g. `!botc pin
 | Command | What it does |
 | --- | --- |
 | `!botc ping` | Replies `pong`. Use it to check the bot is online. |
-| `!botc register` | Registers the current server and channel as the game's location, makes the sender the Storyteller and gives them the `BOTC-StoryTeller` role, and tries to join that channel's voice. Run this before any other game command. Refused if a game is already registered. |
+| `!botc register` or `!botc start` | Registers the current server and channel as the game's location, makes the sender the Storyteller and gives them the `BoTC-StoryTeller` role, and tries to join that channel's voice. Run this before any other game command. Refused if a game is already registered. |
+| `!botc unregister` or `!botc end` | Ends the game. Removes `BoTC-StoryTeller` and `BoTC-Player` from every member who has them, leaves voice, and clears the game state so a new game can be registered. Only the Storyteller can use it. |
 | `!botc sitrep` | Reports whether a game is registered and, if so, the server, channel and Storyteller IDs. |
 | `!botc map` | Finds the village's voice channels by name and posts "Town Locations Mapped". It then lists the players in Town Square, but only to the bot's console for now. Requires `register` first. |
 
@@ -186,7 +189,7 @@ For `!botc map`, the voice channels must use these exact names:
 | `RS` | Riverside |
 | `SC` | Storyteller's Corner |
 
-Game state is kept in memory only. If the bot restarts, run `!botc register` and `!botc map` again. Restarting is also the only way to register a new game or change Storyteller.
+Game state is kept in memory only. If the bot restarts, run `!botc register` and `!botc map` again. A restart doesn't remove anyone's game roles; run `!botc unregister` first if you can.
 
 ## Features
 
