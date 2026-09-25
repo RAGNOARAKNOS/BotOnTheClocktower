@@ -42,10 +42,10 @@ In the developer portal, open **OAuth2 → URL Generator**, tick the `bot` scope
 | Permission | Why the bot needs it |
 | --- | --- |
 | View Channels | See the game's text and voice channels |
-| Send Messages | Reply to commands |
-| Send TTS Messages | Announce "Town Locations Mapped" after `!botc map` |
+| Send Messages | Reply to commands, and post game announcements in Town Square's text chat |
+| Send TTS Messages | Announce "Town Locations Mapped" in the admin channel after `!botc map` |
 | Read Message History | Reply directly to the command message |
-| Connect | Join the game channel's voice on `!botc register` |
+| Connect | Join the Town Square voice channel on `!botc register` |
 | Manage Roles | Give the `BoTC-StoryTeller` role on `!botc register`, and remove the game roles on `!botc unregister` |
 | Move Members | Needed for the planned commands that move players between voice channels |
 
@@ -81,7 +81,7 @@ Other member roles
 
 #### 4. Check channel overrides
 
-Per-channel permission overrides take priority over server-wide permissions. Make sure no override on the game's text channel or the village voice channels denies the bot View Channels, Send Messages, Connect or Move Members.
+Per-channel permission overrides take priority over server-wide permissions. Make sure no override on the admin channel (wherever the Storyteller sends `!botc register`) or on the village voice channels, especially Town Square, denies the bot View Channels, Send Messages, Connect or Move Members.
 
 #### Who becomes Storyteller
 
@@ -120,7 +120,7 @@ Linux
 go run ./cmd/bot
 ```
 
-Once connected, the bot prints `Bot is ready` to the console and listens for commands in every server it has been invited to. It doesn't post anything to Discord at startup. To set up a game, send `!botc register` in the channel you want to use (see [Commands](#commands)). Press Ctrl+C to stop the bot.
+Once connected, the bot prints `Bot is ready` to the console and listens for commands in every server it has been invited to. It doesn't post anything to Discord at startup. To set up a game, the Storyteller sends `!botc register` in the channel they want to use as the admin channel (see [Game channels](#game-channels)). Press Ctrl+C to stop the bot.
 
 To build a binary instead of running from source:
 
@@ -170,14 +170,23 @@ Every command starts with `!botc`, followed by the command name, e.g. `!botc pin
 | Command | What it does |
 | --- | --- |
 | `!botc ping` | Replies `pong`. Use it to check the bot is online. |
-| `!botc register` or `!botc start` | Registers the current server and channel as the game's location, makes the sender the Storyteller and gives them the `BoTC-StoryTeller` role, and tries to join that channel's voice. Run this before any other game command. Refused if a game is already registered. |
-| `!botc unregister` or `!botc end` | Ends the game. Removes `BoTC-StoryTeller` and `BoTC-Player` from every member who has them, leaves voice, and clears the game state so a new game can be registered. Only the Storyteller can use it. |
-| `!botc sitrep` | Reports whether a game is registered and, if so, the server, channel and Storyteller IDs. |
-| `!botc map` | Finds the village's voice channels by name and posts "Town Locations Mapped". It then lists the players in Town Square, but only to the bot's console for now. Requires `register` first. |
+| `!botc register` or `!botc start` | Starts a game. Makes the current channel the admin channel and the Town Square voice channel the game channel, joins Town Square's voice, and posts a "new game" announcement there. Makes the sender the Storyteller and gives them the `BoTC-StoryTeller` role. Run this before any other game command. Refused if a game is already registered, or if there's no voice channel named `Town Square`. |
+| `!botc unregister` or `!botc end` | Ends the game. Removes `BoTC-StoryTeller` and `BoTC-Player` from every member who has them, posts a "game ended" announcement in Town Square, leaves voice, and clears the game state so a new game can be registered. Only the Storyteller can use it. |
+| `!botc sitrep` | Reports whether a game is registered and, if so, the server, the admin and game channels, and the Storyteller. |
+| `!botc map` | Finds the village's voice channels by name and posts "Town Locations Mapped" in the admin channel. It then lists the players in Town Square, but only to the bot's console for now. Requires `register` first. |
+
+Replies to a command always go to the channel the command was sent in.
 
 Any other `!botc` command gets a "Huh? WTF is that command?!" reply.
 
-For `!botc map`, the voice channels must use these exact names:
+### Game channels
+
+A game uses two channels:
+
+- **Admin channel:** the channel the Storyteller sends `!botc register` from. Admin output, such as the `!botc map` announcement, goes here. A private text channel only the Storyteller and moderators can see works well.
+- **Game channel:** the `Town Square` voice channel. The bot joins its voice, and posts game announcements (game started, game ended) in its text chat. It must exist before `!botc register`.
+
+For `!botc register` and `!botc map`, the voice channels must use these exact names:
 
 | Code | Channel name |
 | --- | --- |

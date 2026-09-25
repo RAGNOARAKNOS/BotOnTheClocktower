@@ -22,7 +22,8 @@ func Load() (bot.Settings, error) {
 
 	settings.ApiToken = os.Getenv("BOTAPIKEY")
 	settings.GuildId = "UNSET"
-	settings.ChannelId = "UNSET"
+	settings.AdminChannelId = "UNSET"
+	settings.GameChannelId = "UNSET"
 	settings.StoryTellerId = "UNSET"
 	settings.GameRegistered = false
 

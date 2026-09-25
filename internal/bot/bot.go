@@ -14,7 +14,8 @@ import (
 type Settings struct {
 	ApiToken       string
 	GuildId        string
-	ChannelId      string
+	AdminChannelId string // channel register was sent from; admin output goes here
+	GameChannelId  string // Town Square voice channel; the bot joins it and posts game announcements there
 	GameRegistered bool
 	StoryTellerId  string
 	Players        map[string]string
@@ -137,7 +138,7 @@ func (b *Bot) mapRooms() {
 	}
 
 	fmt.Print(b.settings.Rooms)
-	b.discord.ChannelMessageSendTTS(b.settings.ChannelId, "Town Locations Mapped")
+	b.discord.ChannelMessageSendTTS(b.settings.AdminChannelId, "Town Locations Mapped")
 }
 
 func (b *Bot) getMapGuildChannels(guildId string) map[string]string {
@@ -208,6 +209,22 @@ func (b *Bot) playerNameToId(playerName string) string {
 	}
 
 	return ""
+}
+
+// findVoiceChannelID returns the ID of the server's first voice channel with exactly this name.
+func (b *Bot) findVoiceChannelID(guildID, channelName string) (string, error) {
+	channels, err := b.discord.GuildChannels(guildID)
+	if err != nil {
+		return "", err
+	}
+
+	for _, ch := range channels {
+		if ch.Type == discordgo.ChannelTypeGuildVoice && ch.Name == channelName {
+			return ch.ID, nil
+		}
+	}
+
+	return "", fmt.Errorf("no voice channel named %q in this server", channelName)
 }
 
 // findRoleID returns the ID of the server's role with exactly this name.
@@ -293,7 +310,7 @@ func (b *Bot) sitrep(message *discordgo.MessageCreate) {
 	var serverstate string
 
 	if b.settings.GameRegistered {
-		serverstate = fmt.Sprintf("Game is initialised at guildid# %s channel id# %s storyteller id# %s", b.settings.GuildId, b.settings.ChannelId, b.settings.StoryTellerId)
+		serverstate = fmt.Sprintf("Game is initialised at guildid# %s admin channel <#%s> game channel <#%s> storyteller <@%s>", b.settings.GuildId, b.settings.AdminChannelId, b.settings.GameChannelId, b.settings.StoryTellerId)
 	} else {
 		serverstate = "Game is not initialised"
 	}
@@ -309,16 +326,29 @@ func (b *Bot) register(message *discordgo.MessageCreate) {
 		return
 	}
 
+	townSquareName := villageCodeLookup["TS"]
+	gameChannelID, err := b.findVoiceChannelID(message.GuildID, townSquareName)
+	if err != nil {
+		reply := fmt.Sprintf("Could not find the game channel (%v). Create a voice channel named %q, then try again. This command will not execute", err, townSquareName)
+		b.discord.ChannelMessageSendReply(message.ChannelID, reply, message.Reference())
+		return
+	}
+
 	b.settings.GuildId = message.GuildID
-	b.settings.ChannelId = message.ChannelID
+	b.settings.AdminChannelId = message.ChannelID
+	b.settings.GameChannelId = gameChannelID
 	b.settings.StoryTellerId = message.Author.ID
 	b.settings.GameRegistered = true
 
-	b.discord.ChannelVoiceJoin(b.settings.GuildId, b.settings.ChannelId, false, false)
+	if _, err := b.discord.ChannelVoiceJoin(b.settings.GuildId, b.settings.GameChannelId, false, false); err != nil {
+		fmt.Printf("Could not join the game channel voice: %v \n", err)
+	}
 
-	fmt.Printf("The game has been registered at %s channel %s storyteller %s \n", b.settings.GuildId, b.settings.ChannelId, b.settings.StoryTellerId)
+	fmt.Printf("The game has been registered at %s admin channel %s game channel %s storyteller %s \n", b.settings.GuildId, b.settings.AdminChannelId, b.settings.GameChannelId, b.settings.StoryTellerId)
 
-	reply := fmt.Sprintf("Game registered. <@%s> is the Storyteller.", b.settings.StoryTellerId)
+	b.discord.ChannelMessageSend(b.settings.GameChannelId, fmt.Sprintf("A new game has begun. <@%s> is the Storyteller.", b.settings.StoryTellerId))
+
+	reply := fmt.Sprintf("Game registered. <@%s> is the Storyteller. This is the admin channel; <#%s> is the game channel.", b.settings.StoryTellerId, b.settings.GameChannelId)
 	if err := b.assignStorytellerRole(b.settings.GuildId, b.settings.StoryTellerId); err != nil {
 		fmt.Printf("Could not assign the %s role: %v \n", storytellerRoleName, err)
 		reply += fmt.Sprintf(" Warning: could not assign the %q role (%v). Check the role exists and sits below the bot's role.", storytellerRoleName, err)
@@ -337,14 +367,14 @@ func (b *Bot) register(message *discordgo.MessageCreate) {
 	fmt.Println("Guild")
 	fmt.Println(tempGuild.Name)
 
-	tempChannel, err := b.discord.Channel(b.settings.ChannelId)
+	tempChannel, err := b.discord.Channel(b.settings.AdminChannelId)
 	if err != nil {
 		panic(err)
 	}
 	fmt.Println("Channel")
 	fmt.Println(tempChannel.Name)
 
-	tempStateChannel, err := b.discord.State.Channel(b.settings.ChannelId)
+	tempStateChannel, err := b.discord.State.Channel(b.settings.AdminChannelId)
 	if err != nil {
 		panic(err)
 	}
@@ -385,8 +415,11 @@ func (b *Bot) unregister(message *discordgo.MessageCreate) {
 		}
 	}
 
+	b.discord.ChannelMessageSend(b.settings.GameChannelId, "The game has ended. Thanks for playing!")
+
 	b.settings.GuildId = "UNSET"
-	b.settings.ChannelId = "UNSET"
+	b.settings.AdminChannelId = "UNSET"
+	b.settings.GameChannelId = "UNSET"
 	b.settings.StoryTellerId = "UNSET"
 	b.settings.GameRegistered = false
 	b.settings.Players = nil
