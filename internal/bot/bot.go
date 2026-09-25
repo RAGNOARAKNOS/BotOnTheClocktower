@@ -30,6 +30,14 @@ var villageCodeLookup = map[string]string{
 	"SC": "Storyteller's Corner",
 }
 
+// Discord roles the server must already have. The bot looks them up by exact name.
+const (
+	// storytellerRoleName is given to the user who registers the game.
+	storytellerRoleName = "BoTC-StoryTeller"
+	// playerRoleName marks players in the game. Not used by any command yet.
+	playerRoleName = "BoTC-Player"
+)
+
 type Bot struct {
 	settings Settings
 	discord  *discordgo.Session
@@ -199,6 +207,22 @@ func (b *Bot) playerNameToId(playerName string) string {
 	return ""
 }
 
+// assignStorytellerRole gives the user the server's existing storytellerRoleName role.
+func (b *Bot) assignStorytellerRole(guildID, userID string) error {
+	roles, err := b.discord.GuildRoles(guildID)
+	if err != nil {
+		return err
+	}
+
+	for _, role := range roles {
+		if role.Name == storytellerRoleName {
+			return b.discord.GuildMemberRoleAdd(guildID, userID, role.ID)
+		}
+	}
+
+	return fmt.Errorf("no role named %q in this server", storytellerRoleName)
+}
+
 func (b *Bot) sitrep(message *discordgo.MessageCreate) {
 	var serverstate string
 
@@ -213,13 +237,27 @@ func (b *Bot) sitrep(message *discordgo.MessageCreate) {
 }
 
 func (b *Bot) register(message *discordgo.MessageCreate) {
+	if b.settings.GameRegistered {
+		reply := fmt.Sprintf("A game is already registered, with <@%s> as the Storyteller. This command will not execute", b.settings.StoryTellerId)
+		b.discord.ChannelMessageSendReply(message.ChannelID, reply, message.Reference())
+		return
+	}
+
 	b.settings.GuildId = message.GuildID
 	b.settings.ChannelId = message.ChannelID
+	b.settings.StoryTellerId = message.Author.ID
 	b.settings.GameRegistered = true
 
 	b.discord.ChannelVoiceJoin(b.settings.GuildId, b.settings.ChannelId, false, false)
 
-	fmt.Printf("The game has been registered at %s channel %s \n", b.settings.GuildId, b.settings.ChannelId)
+	fmt.Printf("The game has been registered at %s channel %s storyteller %s \n", b.settings.GuildId, b.settings.ChannelId, b.settings.StoryTellerId)
+
+	reply := fmt.Sprintf("Game registered. <@%s> is the Storyteller.", b.settings.StoryTellerId)
+	if err := b.assignStorytellerRole(b.settings.GuildId, b.settings.StoryTellerId); err != nil {
+		fmt.Printf("Could not assign the %s role: %v \n", storytellerRoleName, err)
+		reply += fmt.Sprintf(" Warning: could not assign the %q role (%v). Check the role exists and sits below the bot's role.", storytellerRoleName, err)
+	}
+	b.discord.ChannelMessageSendReply(message.ChannelID, reply, message.Reference())
 
 	for i := 0; i < len(b.discord.State.Guilds); i++ {
 		tempGuild := b.discord.State.Guilds[i]

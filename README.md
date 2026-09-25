@@ -31,14 +31,62 @@ Register the bot application within your Discord developer page [on the dev page
 
 The bot requests all gateway intents, so on the BOT page you must enable all three **Privileged Gateway Intents** (Presence, Server Members and Message Content). If you don't, Discord refuses the connection, and without Message Content the bot can't read commands.
 
-Assign the Bot the following permissions:
+### Server Setup (for Discord moderators)
 
-- View Channels
-- Send Messages
-- Send TTS Messages (used by `!botc map`)
-- Read Message History (needed to reply to a message)
-- Connect (used by `!botc register`)
-- Move Members (needed for the planned player-moving commands)
+These steps need someone with the **Manage Server** and **Manage Roles** permissions on the Discord server.
+
+#### 1. Invite the bot with these permissions
+
+In the developer portal, open **OAuth2 → URL Generator**, tick the `bot` scope, then tick these permissions and use the generated link to invite the bot:
+
+| Permission | Why the bot needs it |
+| --- | --- |
+| View Channels | See the game's text and voice channels |
+| Send Messages | Reply to commands |
+| Send TTS Messages | Announce "Town Locations Mapped" after `!botc map` |
+| Read Message History | Reply directly to the command message |
+| Connect | Join the game channel's voice on `!botc register` |
+| Manage Roles | Give the `BOTC-StoryTeller` role on `!botc register` |
+| Move Members | Needed for the planned commands that move players between voice channels |
+
+When the bot joins, Discord automatically creates a role with the bot's name that holds these permissions. Don't delete it.
+
+#### 2. Check the game roles exist
+
+The bot uses two roles that must already exist on the server. It doesn't create them; it looks them up by name, and the names must match exactly, including capitals and the hyphen:
+
+| Role | Purpose |
+| --- | --- |
+| `BOTC-StoryTeller` | Given to whoever runs `!botc register` |
+| `BOTC-Player` | Marks players in the game. Not used by any command yet |
+
+The bot doesn't need either role to have any permissions. What you give them is up to you. Useful options for `BOTC-StoryTeller` are Move Members, Mute Members, Deafen Members and Priority Speaker.
+
+#### 3. Put the roles in the right order
+
+Discord only lets a bot give out roles that sit **below its own highest role**. In **Server Settings → Roles**, drag the roles into this order (top of the list = highest):
+
+```text
+Admin / Moderator roles     <- keep these above the bot
+BotOnTheClocktower          <- the bot's own role
+BOTC-StoryTeller            <- must be below the bot's role
+BOTC-Player                 <- must be below the bot's role
+Other member roles
+@everyone
+```
+
+- If `BOTC-StoryTeller` is above the bot's role, registration still succeeds, but the bot can't give out the role. It replies with a warning instead.
+- Manage Roles lets the bot give out **any** role below its own. Keep moderator and admin roles above the bot's role so it can never hand them out.
+
+#### 4. Check channel overrides
+
+Per-channel permission overrides take priority over server-wide permissions. Make sure no override on the game's text channel or the village voice channels denies the bot View Channels, Send Messages, Connect or Move Members.
+
+#### Who becomes Storyteller
+
+- Whoever sends `!botc register` becomes the Storyteller for that game and is given the `BOTC-StoryTeller` role.
+- The bot runs one game at a time. Once a game is registered, `!botc register` is refused for everyone, including the current Storyteller.
+- To start a new game or change Storyteller, restart the bot. The bot never removes the `BOTC-StoryTeller` role, so a moderator has to take it off the previous Storyteller by hand.
 
 ### Run the executable
 
@@ -120,7 +168,7 @@ Every command starts with `!botc`, followed by the command name, e.g. `!botc pin
 | Command | What it does |
 | --- | --- |
 | `!botc ping` | Replies `pong`. Use it to check the bot is online. |
-| `!botc register` | Registers the current server and channel as the game's location and tries to join that channel's voice. Run this before any other game command. |
+| `!botc register` | Registers the current server and channel as the game's location, makes the sender the Storyteller and gives them the `BOTC-StoryTeller` role, and tries to join that channel's voice. Run this before any other game command. Refused if a game is already registered. |
 | `!botc sitrep` | Reports whether a game is registered and, if so, the server, channel and Storyteller IDs. |
 | `!botc map` | Finds the village's voice channels by name and posts "Town Locations Mapped". It then lists the players in Town Square, but only to the bot's console for now. Requires `register` first. |
 
@@ -138,7 +186,7 @@ For `!botc map`, the voice channels must use these exact names:
 | `RS` | Riverside |
 | `SC` | Storyteller's Corner |
 
-Game state is kept in memory only. If the bot restarts, run `!botc register` and `!botc map` again.
+Game state is kept in memory only. If the bot restarts, run `!botc register` and `!botc map` again. Restarting is also the only way to register a new game or change Storyteller.
 
 ## Features
 
@@ -156,7 +204,7 @@ During the NIGHT phase, all players are placed into individually allocated "Cott
 
 Also, at the end of the DAY phase when the town gathers for nominations - *some* players have the tendency to dilly dally in the side channels, this will forceably move the players into "Town Square".
 
-Done so far: game registration (`!botc register`), mapping the village's voice channels (`!botc map`), and an internal helper for moving a player to a channel. Still to do: the `gather` command itself, recording the player list, recognising the Storyteller, and "Cottage-XX" channels. The `pmove` and `cmove` commands are placeholders that currently do nothing.
+Done so far: game registration with the sender as Storyteller (`!botc register`), mapping the village's voice channels (`!botc map`), and an internal helper for moving a player to a channel. Still to do: the `gather` command itself, recording the player list, restricting commands to the Storyteller, and "Cottage-XX" channels. The `pmove` and `cmove` commands are placeholders that currently do nothing.
 
 ### Sending Players to Sleep
 
