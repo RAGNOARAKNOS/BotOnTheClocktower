@@ -204,9 +204,13 @@ Game state is kept in memory only. If the bot restarts, run `!botc register` and
 
 (Ordered by development priority)
 
+This section summarises each feature. The detailed intended behaviour, open questions and decisions for each one are in its spec under [docs/specs/](docs/specs/) (see [Feature specs](#feature-specs)).
+
 ### Gathering Players for the Tribunal
 
-Status: IN WORK
+Status: IN PROGRESS
+
+Spec: [gather.md](docs/specs/gather.md)
 
 ```shell
 !botc gather
@@ -222,6 +226,8 @@ Done so far: game registration with the sender as Storyteller (`!botc register`)
 
 Status: PLANNED
 
+Spec: [bedtime.md](docs/specs/bedtime.md)
+
 ```shell
 !botc bedtime
 ```
@@ -232,9 +238,13 @@ At the end of the DAY phase, all players need to be placed into their respective
 
 Status: PLANNED
 
+Spec: [village-management.md](docs/specs/village-management.md)
+
 ### OBS Integration
 
 Status: PLANNED
+
+Spec: [obs-integration.md](docs/specs/obs-integration.md)
 
 Control a local OBS instance from Discord (scene switching, audio and source control, recording), and change scenes automatically as the game moves between phases. See [roadmap.md](roadmap.md) for the plan.
 
@@ -242,11 +252,41 @@ Control a local OBS instance from Discord (scene switching, audio and source con
 
 Status: IDEA
 
+Spec: [vote-tracking.md](docs/specs/vote-tracking.md)
+
 ### Integration with game visualisation system?
 
 Status: IDEA
 
+Spec: [game-visualisation.md](docs/specs/game-visualisation.md)
+
 ## Developer Notes
+
+### Feature specs
+
+Each feature has a spec file in [docs/specs/](docs/specs/) describing what it should do. This README describes what the bot does *now*; the specs describe what's *intended*, and record how that changes over time.
+
+- **Where to start:** [docs/specs/README.md](docs/specs/README.md) lists every spec with its status (IDEA → PLANNED → IN PROGRESS → DONE).
+- **What a spec contains:** each follows [_template.md](docs/specs/_template.md):
+  - the goal
+  - behaviour with example commands and replies
+  - rules and edge cases
+  - a "Done when" checklist
+  - what's out of scope
+  - open questions
+  - a dated log of decisions
+  - once built, notes on the implementation
+
+Workflow:
+
+1. **New feature:** copy the template, or describe the feature roughly and have it drafted into a spec. Fill in the behaviour, edge cases and "Done when" list, and leave anything undecided under Open questions.
+2. **Build in slices:** implement a few "Done when" items at a time and tick them off.
+3. **Changed your mind:** update the spec first (Behaviour or Rules, plus a dated line under Decisions), then change the code to match.
+4. **Finished:** set the status to DONE, fill in Implementation, and update this README's [Commands](#commands) and [Features](#features) sections.
+
+The Claude Code instructions (CLAUDE.md) tell Claude to read the relevant spec before working on a feature, to ask about open questions rather than guess, and to record decisions in the spec as they're made.
+
+The detailed plan for OBS integration lives in [roadmap.md](roadmap.md), which its spec links to.
 
 ### Anatomy of a command
 
