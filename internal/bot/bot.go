@@ -136,6 +136,10 @@ func (b *Bot) extractCommand(message *discordgo.MessageCreate, rawText []string)
 		b.village(message, rawText)
 	case "character":
 		b.character(message, rawText)
+	case "grimoire":
+		if b.requireStorytellerInAdmin(message) {
+			b.characterList(message)
+		}
 	case "whisper":
 		b.whisper(message)
 	case "pmove":

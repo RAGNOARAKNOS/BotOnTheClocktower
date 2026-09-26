@@ -178,9 +178,13 @@ Every command starts with `!botc`, followed by the command name, e.g. `!botc pin
 | `!botc village add @player...` | Adds the mentioned users to the village and gives them `BoTC-Player`. Storyteller only, from the admin channel. |
 | `!botc village remove @player...` | Removes the mentioned users from the village and takes `BoTC-Player` away. Storyteller only, from the admin channel. |
 | `!botc village list` | Lists the village's players. Storyteller only, from the admin channel. |
-| `!botc character assign @player <Character>` | Stores a village player's character. Any lines after the first (Shift+Enter) are guidance, kept exactly as typed. Nothing is sent yet. Storyteller only, from the admin channel. |
+| `!botc character assign @player [good\|evil] <Character>` | Stores a village player's character and team (Good if left out). Any lines after the first (Shift+Enter) are guidance, kept exactly as typed. Nothing is sent yet. Storyteller only, from the admin channel. |
+| `!botc character team @player good\|evil` | Moves a character to the other team and marks it unsent, so `send` tells the player. Storyteller only, from the admin channel. |
+| `!botc character kill @player...` / `revive @player...` | Marks players Dead or Alive. Nothing is posted publicly until `announce`. Reviving gives back the ghost vote. Storyteller only, from the admin channel. |
+| `!botc character ghostvote @player...` | Switches a dead player's ghost vote between used and available. Storyteller only, from the admin channel. |
+| `!botc character announce` | Posts the deaths and revivals since the last announcement in Town Square's text chat. Storyteller only, from the admin channel. |
 | `!botc character clear @player...` | Removes the stored characters. Storyteller only, from the admin channel. |
-| `!botc character list` | Lists each village player's character and whether it has been sent. Storyteller only, from the admin channel. |
+| `!botc character list` or `!botc grimoire` | Shows the grimoire: each village player's character, team, Alive/Dead, ghost vote, whether it has been sent and any unannounced change, with totals. Storyteller only, from the admin channel. |
 | `!botc character send [@player...]` | DMs every unsent character to its player, or resends to the mentioned players. Reports failures and players with no character. Storyteller only, from the admin channel. |
 | `!botc whisper @player <text>` | DMs a village player a secret message straight away. The text can span several lines. Storyteller only, from the admin channel. |
 
@@ -267,12 +271,17 @@ Spec: [characters.md](docs/specs/characters.md)
 ```shell
 !botc character assign @player Fortune Teller
 Each night, choose 2 players: you learn if either is a Demon.
-!botc character list
+!botc character assign @player evil Poisoner
+!botc grimoire
 !botc character send
 !botc whisper @player Your number tonight is 1.
+!botc character kill @player
+!botc character announce
 ```
 
-The Storyteller gives each village player a character, optionally with guidance on the following lines. They check the list, then send them all at once. Each player gets theirs by direct message. `whisper` sends a player secret information during the game.
+The Storyteller gives each village player a character and a team (Good unless `evil` is given), optionally with guidance on the following lines. They check the grimoire, then send them all at once. Each player gets theirs by direct message, including their team. `whisper` sends a player secret information during the game.
+
+During the game the Storyteller records deaths with `kill` and `revive`, and dead players' ghost votes with `ghostvote`. Nothing is made public until the Storyteller runs `announce`, which posts only what has changed since the last announcement. `!botc grimoire` shows the whole state in the admin channel.
 
 Players must allow direct messages from server members (**Server → Privacy Settings → Direct Messages**). If a DM can't be delivered, the bot names the player so the Storyteller can fix it and send again.
 
