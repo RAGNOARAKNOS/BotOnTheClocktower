@@ -131,5 +131,5 @@ Your number tonight is 1.
 - Life state: `Alive` and `AnnouncedAlive` (the state at the last `announce`). `pendingLifeChanges` lists the players where they differ; `announce` only marks them announced once the post succeeds.
 - Grimoire: `grimoireSummary` (totals), `grimoireLine` (one per player), `chunkLines` (keeps each reply under Discord's 2000-character limit).
 - Delivery: `sendDM` (`UserChannelCreate` + `ChannelMessageSendEmbed`), `dmEmbed` (footer names the server), `dmErrorReason` (turns Discord error 50007 into "they don't accept DMs from this server").
-- State: `Settings.Characters` (user ID → `*Character`). `villageCreate`/`villageRemove` delete dropped players' entries, and `unregister` clears them.
+- State: `Game.Characters` (user ID → `*Character`). `villageCreate`/`villageRemove` delete dropped players' entries, and `unregister` clears them.
 - Character names are limited to 200 characters to keep the embed title within Discord's 256-character limit.

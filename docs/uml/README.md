@@ -61,7 +61,7 @@ Which diagram covers which code. When you change one of these functions, update 
 | `cmd/bot/main.go` `main`, `config.Load`, `bot.Run` | [startup.md](startup.md) |
 | `newMessage`, `extractCommand` | [command-dispatch.md](command-dispatch.md) |
 | `commandAllowed` | [command-dispatch.md](command-dispatch.md) |
-| `register`, `findVoiceChannelID`, `assignStorytellerRole`, `findRoleID` | [game-lifecycle.md](game-lifecycle.md) |
+| `register`, `newGame`, `findVoiceChannelID`, `assignStorytellerRole`, `findRoleID` | [game-lifecycle.md](game-lifecycle.md) |
 | `unregister`, `removeGameRoles` | [game-lifecycle.md](game-lifecycle.md) |
 | `mapRooms`, `getMapGuildChannels`, `villageCodeLookup` | [game-lifecycle.md](game-lifecycle.md) |
 | `sitrep` | [game-lifecycle.md](game-lifecycle.md) |

@@ -5,27 +5,22 @@ import (
 	"io/fs"
 	"os"
 
-	"github.com/RAGNOARAKNOS/BotOnTheClocktower/internal/bot"
 	"github.com/joho/godotenv"
 )
 
-func Load() (bot.Settings, error) {
-	var settings bot.Settings
+// Config is the bot's configuration, read at startup.
+type Config struct {
+	Token string // Discord bot token, from BOTAPIKEY
+}
 
+func Load() (Config, error) {
 	// Loading a .env file is optional: a missing file is fine because the
 	// configuration (e.g. BOTAPIKEY) can be supplied directly via the
 	// environment, such as when running inside a container. Any other load
 	// error is unexpected and is surfaced to the caller.
 	if err := godotenv.Load(); err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return settings, err
+		return Config{}, err
 	}
 
-	settings.ApiToken = os.Getenv("BOTAPIKEY")
-	settings.GuildId = "UNSET"
-	settings.AdminChannelId = "UNSET"
-	settings.GameChannelId = "UNSET"
-	settings.StoryTellerId = "UNSET"
-	settings.GameRegistered = false
-
-	return settings, nil
+	return Config{Token: os.Getenv("BOTAPIKEY")}, nil
 }

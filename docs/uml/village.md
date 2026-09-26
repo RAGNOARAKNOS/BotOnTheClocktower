@@ -2,7 +2,7 @@
 
 [← UML index](README.md)
 
-The village is the list of players in the game (`Settings.Players`, user ID → display name). Players in the village have the `BoTC-Player` role. Covers `village`, `villageCreate`, `villageAdd`, `villageRemove`, `setPlayerRole` and `lookupMember` in [internal/bot/bot.go](../../internal/bot/bot.go). Spec: [village-management.md](../specs/village-management.md).
+The village is the list of players in the game (`Game.Players`, user ID → display name). Players in the village have the `BoTC-Player` role. Covers `village`, `villageCreate`, `villageAdd`, `villageRemove`, `setPlayerRole` and `lookupMember` in [internal/bot/bot.go](../../internal/bot/bot.go). Spec: [village-management.md](../specs/village-management.md).
 
 ## Activity: `village` dispatch
 
@@ -61,7 +61,7 @@ sequenceDiagram
 
     ST->>Bot: !botc village create
     Note over Bot: commandAllowed has passed
-    Bot->>State: Guild(GuildId)
+    Bot->>State: Guild(GuildID)
     State-->>Bot: Guild, with voice states
     Note over Bot,State: Under State.RLock: voice states in Town Square,<br/>except the Storyteller's
     loop each listener
@@ -83,7 +83,7 @@ sequenceDiagram
             Bot->>REST: GuildMemberRoleRemove(guild, player, role)
         end
     end
-    Note over Bot: Settings.Players = new list<br/>Delete the dropped players' Characters
+    Note over Bot: Game.Players = new list<br/>Delete the dropped players' Characters
     Bot->>REST: Reply "Village created with N player(s)..." (replyWithRoleWarning)
     REST-->>ST: Reply in the admin channel
 ```
@@ -102,7 +102,7 @@ flowchart TD
     skip --> next
     mark --> next
     next -->|"[no more mentions]"| role("setPlayerRole: give BoTC-Player<br/>to the players being added")
-    role --> store("Add them to Settings.Players")
+    role --> store("Add them to Game.Players")
     store --> reply("Reply: Added N player(s), who was skipped,<br/>and any role warning")
     usage --> done(((" "))):::final
     reply --> done
@@ -123,7 +123,7 @@ flowchart TD
     skip --> next
     mark --> next
     next -->|"[no more mentions]"| role("setPlayerRole: take BoTC-Player<br/>from the players being removed")
-    role --> del("Delete them from Settings.Players<br/>and delete their characters")
+    role --> del("Delete them from Game.Players<br/>and delete their characters")
     del --> reply("Reply: Removed N player(s), who was skipped,<br/>and any role warning")
     usage --> done(((" "))):::final
     reply --> done
@@ -134,4 +134,4 @@ flowchart TD
 
 ---
 
-Last checked against code: 2026-09-26 (f517dc2)
+Last checked against code: 2026-09-27 (6d82bd7)

@@ -17,7 +17,7 @@ flowchart TD
     d1 -->|"[no game]"| find("findVoiceChannelID:<br/>look for a voice channel named Town Square")
     find --> d2{" "}
     d2 -->|"[no such channel, or GuildChannels failed]"| refused2("Reply: Could not find the game channel")
-    d2 -->|"[found]"| save("Save the guild, admin channel = this channel,<br/>game channel = Town Square, Storyteller = sender.<br/>GameRegistered = true")
+    d2 -->|"[found]"| save("Save the guild, admin channel = this channel,<br/>game channel = Town Square, Storyteller = sender<br/>(newGame, with empty player, character and room lists)")
     save --> announce("Post in Town Square: A new game has begun")
     announce --> role("assignStorytellerRole:<br/>findRoleID(BoTC-StoryTeller), then give it to the sender")
     role --> d3{" "}
@@ -43,7 +43,7 @@ sequenceDiagram
     actor Town as Town Square chat
 
     ST->>Bot: !botc register
-    alt GameRegistered is already true
+    alt a game is already registered
         Bot->>REST: Reply "A game is already registered..."
     else no game
         Bot->>REST: GuildChannels(guild), in findVoiceChannelID
@@ -51,7 +51,7 @@ sequenceDiagram
         alt no voice channel named "Town Square"
             Bot->>REST: Reply "Could not find the game channel..."
         else found
-            Note over Bot: GuildId, AdminChannelId = this channel,<br/>GameChannelId = Town Square,<br/>StoryTellerId = sender, GameRegistered = true
+            Note over Bot: b.game = newGame(guild, admin channel = this channel,<br/>game channel = Town Square, Storyteller = sender)
             Bot->>REST: ChannelMessageSend(Town Square, "A new game has begun...")
             REST-->>Town: Start announcement
             Bot->>REST: GuildRoles(guild), in findRoleID
@@ -82,7 +82,7 @@ flowchart TD
     d5 -->|"[full page: more members may follow]"| page
     d5 -->|"[last page]"| announce("Post in Town Square:<br/>The game has ended")
     recErr --> announce
-    announce --> reset("Reset settings: IDs to UNSET, GameRegistered = false,<br/>Players, Characters and Rooms = nil")
+    announce --> reset("Forget the game: b.game = nil")
     reset --> reply("Reply: Game ended, N roles removed<br/>(plus a warning listing any errors)")
     reply --> ended(((" "))):::final
 
@@ -114,14 +114,14 @@ sequenceDiagram
     end
     Bot->>REST: ChannelMessageSend(Town Square, "The game has ended...")
     REST-->>Town: End announcement
-    Note over Bot: Reset all settings to UNSET / false / nil
+    Note over Bot: Forget the game: b.game = nil
     Bot->>REST: Reply "Game ended. Removed N game role(s)." (plus warnings)
     REST-->>ST: Reply in the admin channel
 ```
 
 ## Sequence: `map`
 
-`map` finds the village's voice channels by name (see `villageCodeLookup`) and stores their IDs in `Settings.Rooms`. It doesn't move anyone.
+`map` finds the village's voice channels by name (see `villageCodeLookup`) and stores their IDs in `Game.Rooms`. It doesn't move anyone.
 
 ```mermaid
 sequenceDiagram
@@ -137,7 +137,7 @@ sequenceDiagram
         Bot->>REST: Reply "Could not map the town's channels..."
     else channels returned
         REST-->>Bot: Channels
-        Note over Bot: Settings.Rooms = code → channel ID<br/>for each name in villageCodeLookup (TS, CA, CF, PS, TW, RS, SC)
+        Note over Bot: Game.Rooms = code → channel ID<br/>for each name in villageCodeLookup (TS, CA, CF, PS, TW, RS, SC)
         Bot->>REST: ChannelMessageSendTTS(admin channel, "Town Locations Mapped")
     end
 ```
@@ -160,4 +160,4 @@ sequenceDiagram
 
 ---
 
-Last checked against code: 2026-09-27 (7fc00d0)
+Last checked against code: 2026-09-27 (6d82bd7)

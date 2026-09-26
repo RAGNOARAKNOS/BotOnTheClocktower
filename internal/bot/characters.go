@@ -198,22 +198,19 @@ func (b *Bot) characterAssign(message *discordgo.MessageCreate) {
 		return
 	}
 
-	playerName, ok := b.settings.Players[userID]
+	playerName, ok := b.game.Players[userID]
 	if !ok {
 		b.reply(message, fmt.Sprintf("<@%s> isn't in the village. Add them with `!botc village add` first.", userID))
 		return
 	}
 
-	if b.settings.Characters == nil {
-		b.settings.Characters = make(map[string]*Character)
-	}
-	previous := b.settings.Characters[userID]
+	previous := b.game.Characters[userID]
 	c := &Character{Name: name, Guidance: guidance, Team: team, Alive: true, AnnouncedAlive: true}
 	if previous != nil {
 		// A new character doesn't bring anyone back to life.
 		c.Alive, c.AnnouncedAlive, c.GhostVoteUsed = previous.Alive, previous.AnnouncedAlive, previous.GhostVoteUsed
 	}
-	b.settings.Characters[userID] = c
+	b.game.Characters[userID] = c
 
 	reply := fmt.Sprintf("%s will be the %s (%s", playerName, name, team)
 	if guidance != "" {
@@ -243,14 +240,14 @@ func (b *Bot) characterTeam(message *discordgo.MessageCreate, rawText []string) 
 	ids, skipped := b.mentionedCharacters(message)
 	var changed []string
 	for _, id := range ids {
-		c := b.settings.Characters[id]
+		c := b.game.Characters[id]
 		if c.Team == team {
-			skipped = append(skipped, fmt.Sprintf("%s (already %s)", b.settings.Players[id], team))
+			skipped = append(skipped, fmt.Sprintf("%s (already %s)", b.game.Players[id], team))
 			continue
 		}
 		c.Team = team
 		c.Sent = false
-		changed = append(changed, b.settings.Players[id])
+		changed = append(changed, b.game.Players[id])
 	}
 
 	reply := fmt.Sprintf("Now %s: %d player(s)", team, len(changed))
@@ -279,16 +276,16 @@ func (b *Bot) characterSetAlive(message *discordgo.MessageCreate, alive bool) {
 	ids, skipped := b.mentionedCharacters(message)
 	var changed []string
 	for _, id := range ids {
-		c := b.settings.Characters[id]
+		c := b.game.Characters[id]
 		if c.Alive == alive {
-			skipped = append(skipped, fmt.Sprintf("%s (already %s)", b.settings.Players[id], state))
+			skipped = append(skipped, fmt.Sprintf("%s (already %s)", b.game.Players[id], state))
 			continue
 		}
 		c.Alive = alive
 		if alive {
 			c.GhostVoteUsed = false
 		}
-		changed = append(changed, b.settings.Players[id])
+		changed = append(changed, b.game.Players[id])
 	}
 
 	reply := fmt.Sprintf("Now %s: %d player(s)", state, len(changed))
@@ -299,7 +296,7 @@ func (b *Bot) characterSetAlive(message *discordgo.MessageCreate, alive bool) {
 	if len(skipped) > 0 {
 		reply += "\nSkipped: " + strings.Join(skipped, ", ")
 	}
-	died, revived := pendingLifeChanges(b.settings.Players, b.settings.Characters)
+	died, revived := pendingLifeChanges(b.game.Players, b.game.Characters)
 	if pending := len(died) + len(revived); pending > 0 {
 		reply += fmt.Sprintf("\n%d change(s) waiting to be announced; use `!botc character announce`.", pending)
 	} else {
@@ -318,13 +315,13 @@ func (b *Bot) characterGhostVote(message *discordgo.MessageCreate) {
 	ids, skipped := b.mentionedCharacters(message)
 	var changed []string
 	for _, id := range ids {
-		c := b.settings.Characters[id]
+		c := b.game.Characters[id]
 		if c.Alive {
-			skipped = append(skipped, b.settings.Players[id]+" (alive, so no ghost vote)")
+			skipped = append(skipped, b.game.Players[id]+" (alive, so no ghost vote)")
 			continue
 		}
 		c.GhostVoteUsed = !c.GhostVoteUsed
-		changed = append(changed, fmt.Sprintf("%s: ghost vote %s", b.settings.Players[id], ghostVoteState(c)))
+		changed = append(changed, fmt.Sprintf("%s: ghost vote %s", b.game.Players[id], ghostVoteState(c)))
 	}
 
 	reply := "No ghost votes changed."
@@ -340,7 +337,7 @@ func (b *Bot) characterGhostVote(message *discordgo.MessageCreate) {
 // characterAnnounce posts the deaths and revivals since the last announcement in
 // the game channel, then marks them announced.
 func (b *Bot) characterAnnounce(message *discordgo.MessageCreate) {
-	died, revived := pendingLifeChanges(b.settings.Players, b.settings.Characters)
+	died, revived := pendingLifeChanges(b.game.Players, b.game.Characters)
 	if len(died)+len(revived) == 0 {
 		b.reply(message, "Nothing to announce: no deaths or revivals since the last announcement.")
 		return
@@ -355,16 +352,16 @@ func (b *Bot) characterAnnounce(message *discordgo.MessageCreate) {
 	}
 	announcement := strings.Join(lines, "\n")
 
-	if _, err := b.discord.ChannelMessageSend(b.settings.GameChannelId, announcement); err != nil {
+	if _, err := b.discord.ChannelMessageSend(b.game.GameChannelID, announcement); err != nil {
 		log.Printf("Could not post the announcement: %v", err)
-		b.reply(message, fmt.Sprintf("Could not post in <#%s> (%v). Nothing was marked as announced.", b.settings.GameChannelId, err))
+		b.reply(message, fmt.Sprintf("Could not post in <#%s> (%v). Nothing was marked as announced.", b.game.GameChannelID, err))
 		return
 	}
 
-	for _, c := range b.settings.Characters {
+	for _, c := range b.game.Characters {
 		c.AnnouncedAlive = c.Alive
 	}
-	b.reply(message, fmt.Sprintf("Announced in <#%s>:\n%s", b.settings.GameChannelId, announcement))
+	b.reply(message, fmt.Sprintf("Announced in <#%s>:\n%s", b.game.GameChannelID, announcement))
 }
 
 // characterClear removes the stored characters of the mentioned players.
@@ -376,11 +373,11 @@ func (b *Bot) characterClear(message *discordgo.MessageCreate) {
 
 	var cleared, skipped []string
 	for _, user := range message.Mentions {
-		if _, ok := b.settings.Characters[user.ID]; !ok {
+		if _, ok := b.game.Characters[user.ID]; !ok {
 			skipped = append(skipped, user.Username)
 			continue
 		}
-		delete(b.settings.Characters, user.ID)
+		delete(b.game.Characters, user.ID)
 		cleared = append(cleared, b.playerName(user.ID, user.Username))
 	}
 
@@ -397,15 +394,15 @@ func (b *Bot) characterClear(message *discordgo.MessageCreate) {
 // characterList replies with the grimoire: every village player's character,
 // team, life state and whether it has been sent, with totals at the top.
 func (b *Bot) characterList(message *discordgo.MessageCreate) {
-	if len(b.settings.Players) == 0 {
+	if len(b.game.Players) == 0 {
 		b.reply(message, "The village is empty. Use `!botc village create` first.")
 		return
 	}
 
-	lines := []string{"Grimoire: " + grimoireSummary(b.settings.Players, b.settings.Characters)}
+	lines := []string{"Grimoire: " + grimoireSummary(b.game.Players, b.game.Characters)}
 	for i, id := range b.sortedPlayerIDs() {
-		line := fmt.Sprintf("%d. %s: ", i+1, b.settings.Players[id])
-		if c, ok := b.settings.Characters[id]; ok {
+		line := fmt.Sprintf("%d. %s: ", i+1, b.game.Players[id])
+		if c, ok := b.game.Characters[id]; ok {
 			line += grimoireLine(c)
 		} else {
 			line += "none"
@@ -534,7 +531,7 @@ func chunkLines(lines []string, limit int) []string {
 // character, in mention order, and a note for each mention without one.
 func (b *Bot) mentionedCharacters(message *discordgo.MessageCreate) (ids, skipped []string) {
 	for _, user := range message.Mentions {
-		if _, ok := b.settings.Characters[user.ID]; ok {
+		if _, ok := b.game.Characters[user.ID]; ok {
 			ids = append(ids, user.ID)
 		} else {
 			skipped = append(skipped, b.playerName(user.ID, user.Username)+" (no character)")
@@ -549,7 +546,7 @@ func (b *Bot) characterSend(message *discordgo.MessageCreate) {
 	var targets, skipped []string
 	if len(message.Mentions) > 0 {
 		for _, user := range message.Mentions {
-			if _, ok := b.settings.Characters[user.ID]; ok {
+			if _, ok := b.game.Characters[user.ID]; ok {
 				targets = append(targets, user.ID)
 			} else {
 				skipped = append(skipped, user.Username)
@@ -557,7 +554,7 @@ func (b *Bot) characterSend(message *discordgo.MessageCreate) {
 		}
 	} else {
 		for _, id := range b.sortedPlayerIDs() {
-			if c, ok := b.settings.Characters[id]; ok && !c.Sent {
+			if c, ok := b.game.Characters[id]; ok && !c.Sent {
 				targets = append(targets, id)
 			}
 		}
@@ -565,7 +562,7 @@ func (b *Bot) characterSend(message *discordgo.MessageCreate) {
 
 	var sent, failed []string
 	for _, id := range targets {
-		c := b.settings.Characters[id]
+		c := b.game.Characters[id]
 		embed := b.dmEmbed(fmt.Sprintf("Your character: %s (%s)", c.Name, c.Team), c.Guidance)
 		name := b.playerName(id, id)
 		if err := b.sendDM(id, embed); err != nil {
@@ -579,8 +576,8 @@ func (b *Bot) characterSend(message *discordgo.MessageCreate) {
 
 	var missing []string
 	for _, id := range b.sortedPlayerIDs() {
-		if _, ok := b.settings.Characters[id]; !ok {
-			missing = append(missing, b.settings.Players[id])
+		if _, ok := b.game.Characters[id]; !ok {
+			missing = append(missing, b.game.Players[id])
 		}
 	}
 
@@ -613,7 +610,7 @@ func (b *Bot) whisper(message *discordgo.MessageCreate) {
 		return
 	}
 
-	playerName, ok := b.settings.Players[userID]
+	playerName, ok := b.game.Players[userID]
 	if !ok {
 		b.reply(message, fmt.Sprintf("<@%s> isn't in the village. This command will not execute", userID))
 		return
@@ -642,7 +639,7 @@ func (b *Bot) sendDM(userID string, embed *discordgo.MessageEmbed) error {
 // dmEmbed builds a DM embed, with the game's server named in the footer.
 func (b *Bot) dmEmbed(title, description string) *discordgo.MessageEmbed {
 	embed := &discordgo.MessageEmbed{Title: title, Description: description}
-	if guild, err := b.discord.State.Guild(b.settings.GuildId); err == nil {
+	if guild, err := b.discord.State.Guild(b.game.GuildID); err == nil {
 		embed.Footer = &discordgo.MessageEmbedFooter{Text: "Blood on the Clocktower on " + guild.Name}
 	}
 	return embed
@@ -659,7 +656,7 @@ func dmErrorReason(err error) string {
 
 // playerName returns the village name for the user, or fallback if they aren't in the village.
 func (b *Bot) playerName(userID, fallback string) string {
-	if name, ok := b.settings.Players[userID]; ok {
+	if name, ok := b.game.Players[userID]; ok {
 		return name
 	}
 	return fallback
@@ -667,12 +664,12 @@ func (b *Bot) playerName(userID, fallback string) string {
 
 // sortedPlayerIDs returns the village players' IDs, ordered by display name.
 func (b *Bot) sortedPlayerIDs() []string {
-	ids := make([]string, 0, len(b.settings.Players))
-	for id := range b.settings.Players {
+	ids := make([]string, 0, len(b.game.Players))
+	for id := range b.game.Players {
 		ids = append(ids, id)
 	}
 	slices.SortFunc(ids, func(a, c string) int {
-		return strings.Compare(b.settings.Players[a], b.settings.Players[c])
+		return strings.Compare(b.game.Players[a], b.game.Players[c])
 	})
 	return ids
 }

@@ -15,16 +15,28 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-type Settings struct {
-	ApiToken       string
-	GuildId        string
-	AdminChannelId string // channel register was sent from; admin output goes here
-	GameChannelId  string // Town Square voice channel; game announcements go to its text chat
-	GameRegistered bool
-	StoryTellerId  string
+// Game is the state of the registered game. It's held in memory only, so a restart loses it.
+type Game struct {
+	GuildID        string
+	AdminChannelID string // channel register was sent from; commands and admin output go here
+	GameChannelID  string // Town Square voice channel; game announcements go to its text chat
+	StorytellerID  string
 	Players        map[string]string     // village: user ID → display name
 	Characters     map[string]*Character // user ID → character; only for players in the village
-	Rooms          map[string]string
+	Rooms          map[string]string     // room code (see villageCodeLookup) → channel ID; filled by map
+}
+
+// newGame starts a game with empty player, character and room lists.
+func newGame(guildID, adminChannelID, gameChannelID, storytellerID string) *Game {
+	return &Game{
+		GuildID:        guildID,
+		AdminChannelID: adminChannelID,
+		GameChannelID:  gameChannelID,
+		StorytellerID:  storytellerID,
+		Players:        make(map[string]string),
+		Characters:     make(map[string]*Character),
+		Rooms:          make(map[string]string),
+	}
 }
 
 var villageCodeLookup = map[string]string{
@@ -48,24 +60,23 @@ const (
 
 type Bot struct {
 	// mu serialises command handling. discordgo runs each event handler in its
-	// own goroutine, so without it two commands could read and write settings at once.
-	mu       sync.Mutex
-	settings Settings
-	discord  *discordgo.Session
+	// own goroutine, so without it two commands could read and write the game at once.
+	mu sync.Mutex
+	// game is nil while no game is registered.
+	game    *Game
+	discord *discordgo.Session
 }
 
-func Run(settings Settings) error {
-	discord, err := discordgo.New("Bot " + settings.ApiToken)
+// Run connects to Discord with the bot token and handles commands until SIGINT or SIGTERM.
+func Run(token string) error {
+	discord, err := discordgo.New("Bot " + token)
 	if err != nil {
 		return err
 	}
 
 	discord.Identify.Intents = discordgo.IntentsAll
 
-	b := &Bot{
-		settings: settings,
-		discord:  discord,
-	}
+	b := &Bot{discord: discord}
 
 	discord.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) {
 		log.Println("Bot is ready")
@@ -159,22 +170,22 @@ func (b *Bot) send(channelID, text string) {
 }
 
 func (b *Bot) mapRooms() error {
-	allChans, err := b.getMapGuildChannels(b.settings.GuildId)
+	allChans, err := b.getMapGuildChannels(b.game.GuildID)
 	if err != nil {
 		return err
 	}
 
-	b.settings.Rooms = make(map[string]string)
+	b.game.Rooms = make(map[string]string)
 	for index, ch := range allChans {
 		for code, room := range villageCodeLookup {
 			if room == ch {
-				b.settings.Rooms[code] = index
+				b.game.Rooms[code] = index
 			}
 		}
 	}
 
-	if _, err := b.discord.ChannelMessageSendTTS(b.settings.AdminChannelId, "Town Locations Mapped"); err != nil {
-		log.Printf("Could not post in channel %s: %v", b.settings.AdminChannelId, err)
+	if _, err := b.discord.ChannelMessageSendTTS(b.game.AdminChannelID, "Town Locations Mapped"); err != nil {
+		log.Printf("Could not post in channel %s: %v", b.game.AdminChannelID, err)
 	}
 	return nil
 }
@@ -219,9 +230,9 @@ func (b *Bot) village(message *discordgo.MessageCreate, rawText []string) {
 // villageCreate replaces the player list with everyone in Town Square voice,
 // except the Storyteller and bots, and makes BoTC-Player match the new list.
 func (b *Bot) villageCreate(message *discordgo.MessageCreate) {
-	guild, err := b.discord.State.Guild(b.settings.GuildId)
+	guild, err := b.discord.State.Guild(b.game.GuildID)
 	if err != nil {
-		reply := fmt.Sprintf("Could not read who is in <#%s> (%v). This command will not execute", b.settings.GameChannelId, err)
+		reply := fmt.Sprintf("Could not read who is in <#%s> (%v). This command will not execute", b.game.GameChannelID, err)
 		b.reply(message, reply)
 		return
 	}
@@ -234,7 +245,7 @@ func (b *Bot) villageCreate(message *discordgo.MessageCreate) {
 	var inTownSquare []listener
 	b.discord.State.RLock()
 	for _, voice := range guild.VoiceStates {
-		if voice.ChannelID == b.settings.GameChannelId && voice.UserID != b.settings.StoryTellerId {
+		if voice.ChannelID == b.game.GameChannelID && voice.UserID != b.game.StorytellerID {
 			inTownSquare = append(inTownSquare, listener{voice.UserID, voice.Member})
 		}
 	}
@@ -250,7 +261,7 @@ func (b *Bot) villageCreate(message *discordgo.MessageCreate) {
 	}
 
 	dropped := make(map[string]string)
-	for id, name := range b.settings.Players {
+	for id, name := range b.game.Players {
 		if _, ok := players[id]; !ok {
 			dropped[id] = name
 		}
@@ -258,14 +269,14 @@ func (b *Bot) villageCreate(message *discordgo.MessageCreate) {
 
 	// Give the role to everyone in the new list, not just newcomers, so an earlier failure gets fixed.
 	roleErr := b.setPlayerRole(players, dropped)
-	b.settings.Players = players
+	b.game.Players = players
 	for id := range dropped {
-		delete(b.settings.Characters, id)
+		delete(b.game.Characters, id)
 	}
 
 	var reply string
 	if len(players) == 0 {
-		reply = fmt.Sprintf("Village created, but it is empty: nobody except the Storyteller is in <#%s>.", b.settings.GameChannelId)
+		reply = fmt.Sprintf("Village created, but it is empty: nobody except the Storyteller is in <#%s>.", b.game.GameChannelID)
 	} else {
 		reply = fmt.Sprintf("Village created with %d player(s): %s", len(players), strings.Join(sortedNames(players), ", "))
 	}
@@ -282,20 +293,16 @@ func (b *Bot) villageAdd(message *discordgo.MessageCreate) {
 		return
 	}
 
-	if b.settings.Players == nil {
-		b.settings.Players = make(map[string]string)
-	}
-
 	added := make(map[string]string)
 	var skipped []string
 	for _, user := range message.Mentions {
 		switch {
 		case user.Bot:
 			skipped = append(skipped, user.Username+" (bot)")
-		case user.ID == b.settings.StoryTellerId:
+		case user.ID == b.game.StorytellerID:
 			skipped = append(skipped, user.Username+" (the Storyteller)")
-		case b.settings.Players[user.ID] != "":
-			skipped = append(skipped, b.settings.Players[user.ID]+" (already in the village)")
+		case b.game.Players[user.ID] != "":
+			skipped = append(skipped, b.game.Players[user.ID]+" (already in the village)")
 		default:
 			added[user.ID] = memberDisplayName(b.lookupMember(user.ID, nil), user.ID)
 		}
@@ -303,7 +310,7 @@ func (b *Bot) villageAdd(message *discordgo.MessageCreate) {
 
 	roleErr := b.setPlayerRole(added, nil)
 	for id, name := range added {
-		b.settings.Players[id] = name
+		b.game.Players[id] = name
 	}
 
 	reply := fmt.Sprintf("Added %d player(s)", len(added))
@@ -326,7 +333,7 @@ func (b *Bot) villageRemove(message *discordgo.MessageCreate) {
 	removed := make(map[string]string)
 	var skipped []string
 	for _, user := range message.Mentions {
-		name, ok := b.settings.Players[user.ID]
+		name, ok := b.game.Players[user.ID]
 		if !ok {
 			skipped = append(skipped, user.Username+" (not in the village)")
 			continue
@@ -336,8 +343,8 @@ func (b *Bot) villageRemove(message *discordgo.MessageCreate) {
 
 	roleErr := b.setPlayerRole(nil, removed)
 	for id := range removed {
-		delete(b.settings.Players, id)
-		delete(b.settings.Characters, id)
+		delete(b.game.Players, id)
+		delete(b.game.Characters, id)
 	}
 
 	reply := fmt.Sprintf("Removed %d player(s)", len(removed))
@@ -352,14 +359,14 @@ func (b *Bot) villageRemove(message *discordgo.MessageCreate) {
 
 // villageList replies with the current players, numbered and sorted by name.
 func (b *Bot) villageList(message *discordgo.MessageCreate) {
-	if len(b.settings.Players) == 0 {
+	if len(b.game.Players) == 0 {
 		b.reply(message, "The village is empty. Use `!botc village create` or `!botc village add @player`.")
 		return
 	}
 
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "The village has %d player(s):", len(b.settings.Players))
-	for i, name := range sortedNames(b.settings.Players) {
+	fmt.Fprintf(&sb, "The village has %d player(s):", len(b.game.Players))
+	for i, name := range sortedNames(b.game.Players) {
 		fmt.Fprintf(&sb, "\n%d. %s", i+1, name)
 	}
 	b.reply(message, sb.String())
@@ -372,7 +379,7 @@ func (b *Bot) villageList(message *discordgo.MessageCreate) {
 // admin channel of the registered server, except ping, which the Storyteller can send
 // from anywhere; anything else gets a refusal.
 func (b *Bot) commandAllowed(message *discordgo.MessageCreate, command string) bool {
-	if !b.settings.GameRegistered {
+	if b.game == nil {
 		if command == "register" || command == "start" || command == "ping" {
 			return true
 		}
@@ -380,12 +387,12 @@ func (b *Bot) commandAllowed(message *discordgo.MessageCreate, command string) b
 		return false
 	}
 
-	if command == "ping" && message.Author.ID == b.settings.StoryTellerId {
+	if command == "ping" && message.Author.ID == b.game.StorytellerID {
 		return true
 	}
 
-	if message.GuildID != b.settings.GuildId || message.Author.ID != b.settings.StoryTellerId || message.ChannelID != b.settings.AdminChannelId {
-		reply := fmt.Sprintf("Commands only work for the Storyteller (<@%s>), in the admin channel <#%s>. This command will not execute", b.settings.StoryTellerId, b.settings.AdminChannelId)
+	if message.GuildID != b.game.GuildID || message.Author.ID != b.game.StorytellerID || message.ChannelID != b.game.AdminChannelID {
+		reply := fmt.Sprintf("Commands only work for the Storyteller (<@%s>), in the admin channel <#%s>. This command will not execute", b.game.StorytellerID, b.game.AdminChannelID)
 		b.reply(message, reply)
 		return false
 	}
@@ -400,19 +407,19 @@ func (b *Bot) setPlayerRole(add, remove map[string]string) error {
 		return nil
 	}
 
-	roleID, err := b.findRoleID(b.settings.GuildId, playerRoleName)
+	roleID, err := b.findRoleID(b.game.GuildID, playerRoleName)
 	if err != nil {
 		return err
 	}
 
 	var errs []error
 	for id, name := range add {
-		if err := b.discord.GuildMemberRoleAdd(b.settings.GuildId, id, roleID); err != nil {
+		if err := b.discord.GuildMemberRoleAdd(b.game.GuildID, id, roleID); err != nil {
 			errs = append(errs, fmt.Errorf("giving role to %s: %w", name, err))
 		}
 	}
 	for id, name := range remove {
-		if err := b.discord.GuildMemberRoleRemove(b.settings.GuildId, id, roleID); err != nil {
+		if err := b.discord.GuildMemberRoleRemove(b.game.GuildID, id, roleID); err != nil {
 			errs = append(errs, fmt.Errorf("removing role from %s: %w", name, err))
 		}
 	}
@@ -435,10 +442,10 @@ func (b *Bot) lookupMember(userID string, known *discordgo.Member) *discordgo.Me
 	if known != nil && known.User != nil {
 		return known
 	}
-	if member, err := b.discord.State.Member(b.settings.GuildId, userID); err == nil && member.User != nil {
+	if member, err := b.discord.State.Member(b.game.GuildID, userID); err == nil && member.User != nil {
 		return member
 	}
-	if member, err := b.discord.GuildMember(b.settings.GuildId, userID); err == nil && member.User != nil {
+	if member, err := b.discord.GuildMember(b.game.GuildID, userID); err == nil && member.User != nil {
 		return member
 	}
 	return nil
@@ -560,12 +567,12 @@ func (b *Bot) removeGameRoles(guildID string) (int, error) {
 
 // sitrep reports where the game is running. It only runs while a game is registered.
 func (b *Bot) sitrep(message *discordgo.MessageCreate) {
-	b.send(message.ChannelID, fmt.Sprintf("SITREP-Game is initialised at guildid# %s admin channel <#%s> game channel <#%s> storyteller <@%s>", b.settings.GuildId, b.settings.AdminChannelId, b.settings.GameChannelId, b.settings.StoryTellerId))
+	b.send(message.ChannelID, fmt.Sprintf("SITREP-Game is initialised at guildid# %s admin channel <#%s> game channel <#%s> storyteller <@%s>", b.game.GuildID, b.game.AdminChannelID, b.game.GameChannelID, b.game.StorytellerID))
 }
 
 func (b *Bot) register(message *discordgo.MessageCreate) {
-	if b.settings.GameRegistered {
-		reply := fmt.Sprintf("A game is already registered, with <@%s> as the Storyteller. This command will not execute", b.settings.StoryTellerId)
+	if b.game != nil {
+		reply := fmt.Sprintf("A game is already registered, with <@%s> as the Storyteller. This command will not execute", b.game.StorytellerID)
 		b.reply(message, reply)
 		return
 	}
@@ -578,18 +585,14 @@ func (b *Bot) register(message *discordgo.MessageCreate) {
 		return
 	}
 
-	b.settings.GuildId = message.GuildID
-	b.settings.AdminChannelId = message.ChannelID
-	b.settings.GameChannelId = gameChannelID
-	b.settings.StoryTellerId = message.Author.ID
-	b.settings.GameRegistered = true
+	b.game = newGame(message.GuildID, message.ChannelID, gameChannelID, message.Author.ID)
 
-	log.Printf("The game has been registered at %s admin channel %s game channel %s storyteller %s", b.settings.GuildId, b.settings.AdminChannelId, b.settings.GameChannelId, b.settings.StoryTellerId)
+	log.Printf("The game has been registered at %s admin channel %s game channel %s storyteller %s", b.game.GuildID, b.game.AdminChannelID, b.game.GameChannelID, b.game.StorytellerID)
 
-	b.send(b.settings.GameChannelId, fmt.Sprintf("A new game has begun. <@%s> is the Storyteller.", b.settings.StoryTellerId))
+	b.send(b.game.GameChannelID, fmt.Sprintf("A new game has begun. <@%s> is the Storyteller.", b.game.StorytellerID))
 
-	reply := fmt.Sprintf("Game registered. <@%s> is the Storyteller. This is the admin channel; <#%s> is the game channel.", b.settings.StoryTellerId, b.settings.GameChannelId)
-	if err := b.assignStorytellerRole(b.settings.GuildId, b.settings.StoryTellerId); err != nil {
+	reply := fmt.Sprintf("Game registered. <@%s> is the Storyteller. This is the admin channel; <#%s> is the game channel.", b.game.StorytellerID, b.game.GameChannelID)
+	if err := b.assignStorytellerRole(b.game.GuildID, b.game.StorytellerID); err != nil {
 		log.Printf("Could not assign the %s role: %v", storytellerRoleName, err)
 		reply += fmt.Sprintf(" Warning: could not assign the %q role (%v). Check the role exists and sits below the bot's role.", storytellerRoleName, err)
 	}
@@ -597,22 +600,15 @@ func (b *Bot) register(message *discordgo.MessageCreate) {
 }
 
 // unregister ends the current game: it removes the game roles from everyone
-// and resets the game state so a new game can be registered.
+// and forgets the game so a new one can be registered.
 func (b *Bot) unregister(message *discordgo.MessageCreate) {
-	guildID := b.settings.GuildId
+	guildID := b.game.GuildID
 
 	removed, roleErr := b.removeGameRoles(guildID)
 
-	b.send(b.settings.GameChannelId, "The game has ended. Thanks for playing!")
+	b.send(b.game.GameChannelID, "The game has ended. Thanks for playing!")
 
-	b.settings.GuildId = "UNSET"
-	b.settings.AdminChannelId = "UNSET"
-	b.settings.GameChannelId = "UNSET"
-	b.settings.StoryTellerId = "UNSET"
-	b.settings.GameRegistered = false
-	b.settings.Players = nil
-	b.settings.Characters = nil
-	b.settings.Rooms = nil
+	b.game = nil
 
 	log.Printf("The game at %s has been unregistered, %d game roles removed", guildID, removed)
 

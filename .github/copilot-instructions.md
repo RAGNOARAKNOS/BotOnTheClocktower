@@ -41,12 +41,12 @@ Configuration: `BOTAPIKEY` (Discord bot token), read from the environment or fro
 ## Layout
 
 - `cmd/bot/main.go` — entry point: `config.Load()` then `bot.Run(settings)`.
-- `internal/config/config.go` — loads `.env` (a missing file is fine), fills `bot.Settings` with the token and `"UNSET"` placeholders for guild/admin channel/game channel/storyteller IDs.
-- `internal/bot/bot.go` — `Settings`, the `Bot` struct, Discord session setup, message handling, and most command implementations.
+- `internal/config/config.go` — loads `.env` (a missing file is fine) and returns a `Config` holding the bot token.
+- `internal/bot/bot.go` — `Game` (the registered game's state), the `Bot` struct, Discord session setup, message handling, and most command implementations.
 - `internal/bot/characters.go` — the `character` and `whisper` commands, raw-message parsing (`parseAssignment`, `parseWhisper`) and DM helpers; tests in `characters_test.go`.
 - `docs/uml/` — Mermaid UML activity and sequence diagrams of how the code works at runtime, with a source map from Go functions to diagrams.
 
-Note that `config` imports `bot` (for `bot.Settings`), so `bot` must not import `config`.
+`config` and `bot` don't import each other; `main` passes the token from one to the other.
 
 ## Feature specs
 
@@ -61,18 +61,18 @@ Intended behaviour lives in `docs/specs/`, one file per feature (index and workf
 - `bot.Run` opens a discordgo session with `IntentsAll`, registers a `Ready` handler and `newMessage`, then blocks until SIGINT/SIGTERM.
 - `newMessage` ignores messages from any bot (including itself), splits the content with `strings.Fields`, and dispatches when the first token equals `!botc` (case-insensitive) and there are at least two tokens. The second token, lowercased, is the command.
 - `newMessage` holds `Bot.mu` for the whole command, so commands run one at a time (discordgo runs each handler in its own goroutine). It also recovers panics, logging the stack and replying with an error, so a bug doesn't kill the bot and lose the in-memory game. Don't call anything that re-enters the message handler while holding the lock.
-- Access (`commandAllowed`, checked in `extractCommand` before the switch, for every command): with no game registered, only `register`/`start` and `ping` run, from any channel, and everything else (including unknown commands) is ignored silently. Once registered, every command must come from `StoryTellerId`, in `AdminChannelId`, in `GuildId`, except `ping`, which only needs to come from `StoryTellerId`; anything else gets a refusal reply. Command handlers don't repeat these checks.
+- Access (`commandAllowed`, checked in `extractCommand` before the switch, for every command): with no game registered, only `register`/`start` and `ping` run, from any channel, and everything else (including unknown commands) is ignored silently. Once registered, every command must come from `StorytellerID`, in `AdminChannelID`, in `GuildID`, except `ping`, which only needs to come from `StorytellerID`; anything else gets a refusal reply. Command handlers don't repeat these checks.
 - Commands (`extractCommand` switch):
   - `ping` → replies `pong`
-  - `register` / `start` → refused if `GameRegistered` is already true, or if `findVoiceChannelID` can't find a voice channel named `villageCodeLookup["TS"]` (Town Square). Otherwise sets `AdminChannelId` to the message's channel and `GameChannelId` to Town Square, sets `StoryTellerId` to the sender, sets `GameRegistered`, posts a start announcement in the game channel, and gives the sender the `BoTC-StoryTeller` Discord role via `assignStorytellerRole` (looks the role up by exact name via `findRoleID`; role names are the `storytellerRoleName`/`playerRoleName` constants; if that fails, registration still succeeds and the reply includes a warning).
-  - `unregister` / `end` → `removeGameRoles` pages through all guild members (`GuildMembers`, 1000 per page) and strips both game roles from anyone who has them, collecting errors with `errors.Join` rather than stopping. Then it posts an end announcement in the game channel, resets settings to `"UNSET"`/false/nil, and replies with the count plus any warnings.
+  - `register` / `start` → refused if `b.game` is already set, or if `findVoiceChannelID` can't find a voice channel named `villageCodeLookup["TS"]` (Town Square). Otherwise creates the game with `newGame` (admin channel = the message's channel, game channel = Town Square, Storyteller = the sender), posts a start announcement in the game channel, and gives the sender the `BoTC-StoryTeller` Discord role via `assignStorytellerRole` (looks the role up by exact name via `findRoleID`; role names are the `storytellerRoleName`/`playerRoleName` constants; if that fails, registration still succeeds and the reply includes a warning).
+  - `unregister` / `end` → `removeGameRoles` pages through all guild members (`GuildMembers`, 1000 per page) and strips both game roles from anyone who has them, collecting errors with `errors.Join` rather than stopping. Then it posts an end announcement in the game channel, sets `b.game` to nil, and replies with the count plus any warnings.
   - `sitrep` → reports the guild, admin/game channels and Storyteller
 - The bot never joins voice; it has no audio features, and moving members (`GuildMemberMove`) doesn't require it. Don't add `ChannelVoiceJoin` back.
-- Channel routing: command replies go to the channel the command came from (so the admin channel, except for `register`, `ping` and refusals); admin output (e.g. `mapRooms`' TTS) goes to `AdminChannelId`; player-facing announcements go to `GameChannelId` (Town Square's text-in-voice chat).
-  - `map` → `mapRooms` resolves channel IDs for the names in `villageCodeLookup` (codes `TS`, `CA`, `CF`, `PS`, `TW`, `RS`, `SC`) into `Settings.Rooms`. It doesn't touch players.
-  - `village create|add|remove|list` → maintains `Settings.Players` (user ID → display name). `create` replaces the list with everyone in Town Square voice (`GameChannelId`, from the state cache's voice states) except the Storyteller and bots. `add`/`remove` take @mentions (`message.Mentions`). `setPlayerRole` gives or takes `BoTC-Player` to match; role failures only add a warning to the reply. Players dropped from the village lose their stored character.
-  - `character assign|team|kill|revive|ghostvote|announce|clear|list|send` → stores `Settings.Characters` (user ID → `*Character{Name, Guidance, Team, Sent, Alive, AnnouncedAlive, GhostVoteUsed}`) for village players. `assign` parses the raw `message.Content` (not `strings.Fields`) so multi-line guidance and Markdown survive: an optional `good`/`evil` word (default Good; `splitTeam`, with `teamWordNames` for "Evil Twin") then the name follow the mention on the first line, and later lines are guidance. `send` DMs unsent characters as embeds (`sendDM`, title includes the team) and marks them sent; `send @player` resends; `team` marks a character unsent. A failed DM leaves the character unsent and is reported.
-  - Deaths: `kill`/`revive` only change `Alive`; `AnnouncedAlive` holds the state at the last `announce`, and `pendingLifeChanges` (where they differ) drives `announce` (posts to `GameChannelId`) and the grimoire. `revive` resets `GhostVoteUsed`.
+- Channel routing: command replies go to the channel the command came from (so the admin channel, except for `register`, `ping` and refusals); admin output (e.g. `mapRooms`' TTS) goes to `AdminChannelID`; player-facing announcements go to `GameChannelID` (Town Square's text-in-voice chat).
+  - `map` → `mapRooms` resolves channel IDs for the names in `villageCodeLookup` (codes `TS`, `CA`, `CF`, `PS`, `TW`, `RS`, `SC`) into `Game.Rooms`. It doesn't touch players.
+  - `village create|add|remove|list` → maintains `Game.Players` (user ID → display name). `create` replaces the list with everyone in Town Square voice (`GameChannelID`, from the state cache's voice states) except the Storyteller and bots. `add`/`remove` take @mentions (`message.Mentions`). `setPlayerRole` gives or takes `BoTC-Player` to match; role failures only add a warning to the reply. Players dropped from the village lose their stored character.
+  - `character assign|team|kill|revive|ghostvote|announce|clear|list|send` → stores `Game.Characters` (user ID → `*Character{Name, Guidance, Team, Sent, Alive, AnnouncedAlive, GhostVoteUsed}`) for village players. `assign` parses the raw `message.Content` (not `strings.Fields`) so multi-line guidance and Markdown survive: an optional `good`/`evil` word (default Good; `splitTeam`, with `teamWordNames` for "Evil Twin") then the name follow the mention on the first line, and later lines are guidance. `send` DMs unsent characters as embeds (`sendDM`, title includes the team) and marks them sent; `send @player` resends; `team` marks a character unsent. A failed DM leaves the character unsent and is reported.
+  - Deaths: `kill`/`revive` only change `Alive`; `AnnouncedAlive` holds the state at the last `announce`, and `pendingLifeChanges` (where they differ) drives `announce` (posts to `GameChannelID`) and the grimoire. `revive` resets `GhostVoteUsed`.
   - `grimoire` is an alias for `character list`: `grimoireSummary` totals plus a `grimoireLine` per player, split into 2000-character messages by `chunkLines`.
   - `whisper @player <text>` → DMs a village player straight away; nothing is stored.
   - anything else (reaching the switch) → "Huh? WTF is that command?!"
@@ -80,7 +80,7 @@ Intended behaviour lives in `docs/specs/`, one file per feature (index and workf
 ## Things to know before changing code
 
 - **Keep the README in step.** Every command is `!botc <command>`. When you add or change a command, update the README's Commands table (and its Features section if the feature's status changes).
-- **Game state is in-memory only** in `Bot.settings` and is lost on restart. Only touch it from within command handling, where `Bot.mu` is held; add locking if you ever read it from another handler or goroutine.
+- **Game state is in-memory only** in `Bot.game` (`nil` = no game registered) and is lost on restart. Only touch it from within command handling, where `Bot.mu` is held; add locking if you ever read it from another handler or goroutine.
 - **Access is global:** `commandAllowed` restricts every command to the Storyteller in the admin channel, so new commands need no access check of their own. `register`/`start` and `ping` are the only commands that run with no game registered, and `ping` is the only one the Storyteller can send outside the admin channel; add any other exception to `commandAllowed`.
 - **Incomplete pieces:** `villageCodeLookup` has no "Cottage-XX" entries even though the planned features rely on them.
 - **Error handling:** don't `panic`; return errors and reply to the channel. Send replies with `b.reply` (threaded) or `b.send` (plain), which log send failures; don't call `ChannelMessageSend*` directly without checking the error.
@@ -100,7 +100,7 @@ Intended behaviour lives in `docs/specs/`, one file per feature (index and workf
 
 Where the roadmap doesn't match the current code:
 
-- It says "add OBS config fields to Settings in config.go", but `Settings` is defined in `internal/bot`.
+- It says "add OBS config fields to Settings in config.go"; there's no `Settings` any more. Add them to `config.Config` and pass them to the bot from `main`.
 - It says to gate commands behind a "Storyteller check (same pattern as `register`)", but `register` has no such check. No per-command check is needed: `commandAllowed` already restricts every command, including `obs` ones, to the Storyteller in the admin channel.
 - Phase 3 hooks into bedtime/wake commands that don't exist yet.
 

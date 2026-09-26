@@ -14,8 +14,8 @@ The detailed plan lives in [roadmap.md](../../roadmap.md): architecture, configu
 
 Points where the roadmap doesn't match the current code:
 
-- It says to add OBS settings in `config.go`, but the `Settings` struct lives in `internal/bot`.
-- It says to gate commands behind a "Storyteller check (same pattern as `register`)". No command other than `unregister` checks for the Storyteller yet.
+- It says to add OBS settings to a `Settings` struct in `config.go`. That struct no longer exists: add them to `config.Config` and pass them to the bot from `main`.
+- It says to gate commands behind a "Storyteller check (same pattern as `register`)". That's no longer needed: every command is already restricted to the Storyteller in the admin channel.
 - Phase 3 hooks into `bedtime` and a "wake" command, which don't exist yet. Is "wake" the same as `gather`?
 
 ## Decisions

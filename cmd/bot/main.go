@@ -8,12 +8,12 @@ import (
 )
 
 func main() {
-	settings, err := config.Load()
+	cfg, err := config.Load()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	if err := bot.Run(settings); err != nil {
+	if err := bot.Run(cfg.Token); err != nil {
 		log.Fatal(err)
 	}
 }

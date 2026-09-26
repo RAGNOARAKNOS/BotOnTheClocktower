@@ -48,6 +48,6 @@ Groundwork that exists:
 
 - `register` identifies the Storyteller and Town Square.
 - `map` records the village channel IDs.
-- `village` records the players in `Settings.Players`.
+- `village` records the players in `Game.Players`.
 - An unused `moveUserToChannel` helper was removed on 2026-09-27. Moving a member is one `GuildMemberMove(guild, user, &channelID)` call; check the room code exists in `Rooms` and handle the error.
 - The bot needs **Move Members** and **Connect** on the destination channel.

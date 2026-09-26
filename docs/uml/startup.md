@@ -13,8 +13,8 @@ flowchart TD
     start((" ")):::initial --> load("config.Load: godotenv.Load")
     load --> d1{" "}
     d1 -->|"[error other than file not found]"| fatal("log.Fatal: print the error and exit")
-    d1 -->|"[.env loaded, or no .env file]"| fill("Read BOTAPIKEY<br/>Set guild, channel and Storyteller IDs to UNSET")
-    fill --> run("bot.Run(settings)")
+    d1 -->|"[.env loaded, or no .env file]"| fill("Read BOTAPIKEY into Config.Token")
+    fill --> run("bot.Run(cfg.Token)")
     run --> newS("discordgo.New with the bot token")
     newS --> d2{" "}
     d2 -->|"[error]"| fatal
@@ -46,16 +46,16 @@ sequenceDiagram
 
     OS->>Main: Start the process
     Main->>+Config: Load()
-    Note over Config: godotenv.Load() (a missing .env is ignored)<br/>ApiToken = BOTAPIKEY, IDs = "UNSET"
-    Config-->>-Main: Settings
-    Main->>+Bot: Run(settings)
+    Note over Config: godotenv.Load() (a missing .env is ignored)<br/>Token = BOTAPIKEY
+    Config-->>-Main: Config
+    Main->>+Bot: Run(cfg.Token)
     Bot->>Session: discordgo.New("Bot " + token)
     Bot->>Session: Identify.Intents = IntentsAll
     Bot->>Session: AddHandler(Ready), AddHandler(newMessage)
     Bot->>+Session: Open()
     Session->>Gateway: Connect and identify (token, intents)
     Gateway-->>Session: Ready event
-    Session-)Bot: Ready handler prints "Bot is ready"
+    Session-)Bot: Ready handler logs "Bot is ready"
     Session-->>-Bot: nil
     Note over Bot: Blocks on the stop channel
     Note over Gateway,Bot: Commands arrive as MessageCreate events (see command-dispatch.md)
@@ -68,4 +68,4 @@ sequenceDiagram
 
 ---
 
-Last checked against code: 2026-09-26 (aba771e)
+Last checked against code: 2026-09-27 (6d82bd7)

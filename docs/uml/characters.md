@@ -4,7 +4,7 @@
 
 The Storyteller gives each village player a secret character and team, sends them by DM, and tracks deaths and ghost votes. Covers [internal/bot/characters.go](../../internal/bot/characters.go). Spec: [characters.md](../specs/characters.md).
 
-Like every command, `character`, `grimoire` and `whisper` only run for the Storyteller in the admin channel; [`commandAllowed`](command-dispatch.md#activity-commandallowed) checks that before they're called. A character (`Settings.Characters`, user ID → `*Character`) holds these fields:
+Like every command, `character`, `grimoire` and `whisper` only run for the Storyteller in the admin channel; [`commandAllowed`](command-dispatch.md#activity-commandallowed) checks that before they're called. A character (`Game.Characters`, user ID → `*Character`) holds these fields:
 
 | Field | Meaning |
 | --- | --- |
@@ -188,7 +188,7 @@ sequenceDiagram
         Note over Bot: Targets = village players with an unsent character, by name
     end
     loop each target
-        Bot->>State: Guild(GuildId), for the embed footer (dmEmbed)
+        Bot->>State: Guild(GuildID), for the embed footer (dmEmbed)
         Bot->>REST: UserChannelCreate(player), in sendDM
         REST-->>Bot: DM channel
         Bot->>REST: ChannelMessageSendEmbed(DM, "Your character: Name (Team)", guidance)
@@ -259,4 +259,4 @@ sequenceDiagram
 
 ---
 
-Last checked against code: 2026-09-26 (f517dc2)
+Last checked against code: 2026-09-27 (6d82bd7)
