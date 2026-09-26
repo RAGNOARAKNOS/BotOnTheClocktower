@@ -31,7 +31,7 @@ A Discord bot (Go, [discordgo](https://github.com/bwmarrin/discordgo)) that help
 ```shell
 go run ./cmd/bot                                   # run locally (needs BOTAPIKEY)
 go build -o BotOnTheClocktower.exe ./cmd/bot       # build a binary
-go test ./...                                      # tests (none exist yet)
+go test ./...                                      # tests (parser tests in internal/bot)
 go vet ./...
 docker build -t botontheclocktower .               # container image (distroless, nonroot)
 ```
@@ -42,7 +42,8 @@ Configuration: `BOTAPIKEY` (Discord bot token), read from the environment or fro
 
 - [cmd/bot/main.go](cmd/bot/main.go) — entry point: `config.Load()` then `bot.Run(settings)`.
 - [internal/config/config.go](internal/config/config.go) — loads `.env` (a missing file is fine), fills `bot.Settings` with the token and `"UNSET"` placeholders for guild/admin channel/game channel/storyteller IDs.
-- [internal/bot/bot.go](internal/bot/bot.go) — everything else: `Settings`, the `Bot` struct, Discord session setup, message handling, and command implementations.
+- [internal/bot/bot.go](internal/bot/bot.go) — `Settings`, the `Bot` struct, Discord session setup, message handling, and most command implementations.
+- [internal/bot/characters.go](internal/bot/characters.go) — the `character` and `whisper` commands, raw-message parsing (`parseAssignment`, `parseWhisper`) and DM helpers; tests in `characters_test.go`.
 
 Note that `config` imports `bot` (for `bot.Settings`), so `bot` must not import `config`.
 
@@ -67,7 +68,9 @@ Intended behaviour lives in [docs/specs/](docs/specs/), one file per feature (in
 - The bot never joins voice; it has no audio features, and moving members (`GuildMemberMove`) doesn't require it. Don't add `ChannelVoiceJoin` back.
 - Channel routing: command replies go to the channel the command came from; admin output (e.g. `mapRooms`' TTS) goes to `AdminChannelId`; player-facing announcements go to `GameChannelId` (Town Square's text-in-voice chat).
   - `map` → (requires `register` first) `mapRooms` resolves channel IDs for the names in `villageCodeLookup` (codes `TS`, `CA`, `CF`, `PS`, `TW`, `RS`, `SC`) into `Settings.Rooms`. It doesn't touch players.
-  - `village create|add|remove|list` → Storyteller only, from the admin channel (`requireStorytellerInAdmin`). Maintains `Settings.Players` (user ID → display name). `create` replaces the list with everyone in Town Square voice (`GameChannelId`, from the state cache's voice states) except the Storyteller and bots. `add`/`remove` take @mentions (`message.Mentions`). `setPlayerRole` gives or takes `BoTC-Player` to match; role failures only add a warning to the reply.
+  - `village create|add|remove|list` → Storyteller only, from the admin channel (`requireStorytellerInAdmin`). Maintains `Settings.Players` (user ID → display name). `create` replaces the list with everyone in Town Square voice (`GameChannelId`, from the state cache's voice states) except the Storyteller and bots. `add`/`remove` take @mentions (`message.Mentions`). `setPlayerRole` gives or takes `BoTC-Player` to match; role failures only add a warning to the reply. Players dropped from the village lose their stored character.
+  - `character assign|clear|list|send` → Storyteller only, from the admin channel. Stores `Settings.Characters` (user ID → `*Character{Name, Guidance, Sent}`) for village players. `assign` parses the raw `message.Content` (not `strings.Fields`) so multi-line guidance and Markdown survive: the name follows the mention on the first line and later lines are guidance. `send` DMs unsent characters as embeds (`sendDM`) and marks them sent; `send @player` resends. A failed DM leaves the character unsent and is reported.
+  - `whisper @player <text>` → Storyteller only, from the admin channel. DMs a village player straight away; nothing is stored.
   - `pmove`, `cmove` → empty stubs
   - anything else → "Huh? WTF is that command?!"
 - Helpers `moveUserToChannel` (uses `GuildMemberMove` with a room code) and `playerNameToId` exist but aren't wired to commands yet.
@@ -76,7 +79,7 @@ Intended behaviour lives in [docs/specs/](docs/specs/), one file per feature (in
 
 - **Command syntax differs from the README.** The README documents `!gather` / `!bedtime`; the code actually expects `!botc <command>`. Keep them in sync when adding commands.
 - **Game state is in-memory only** in `Bot.settings` and is lost on restart. Only touch it from within command handling, where `Bot.mu` is held; add locking if you ever read it from another handler or goroutine.
-- **Incomplete pieces:** only `unregister` and `village` are restricted to the Storyteller; `villageCodeLookup` has no "Cottage-XX" entries even though the planned features rely on them.
+- **Incomplete pieces:** only `unregister`, `village`, `character` and `whisper` are restricted to the Storyteller; `villageCodeLookup` has no "Cottage-XX" entries even though the planned features rely on them.
 - **Error handling:** don't `panic`; return errors and reply to the channel. Many Discord call return values (mostly message sends) are still ignored.
 - Lots of `fmt.Print*` debug output — there's no structured logging yet.
 - The module path is `github.com/RAGNOARAKNOS/BotOnTheClocktower` (uppercase), even though the local checkout directory is lowercase. Use the module path in imports.

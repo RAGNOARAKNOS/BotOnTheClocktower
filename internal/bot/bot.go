@@ -21,7 +21,8 @@ type Settings struct {
 	GameChannelId  string // Town Square voice channel; game announcements go to its text chat
 	GameRegistered bool
 	StoryTellerId  string
-	Players        map[string]string
+	Players        map[string]string     // village: user ID → display name
+	Characters     map[string]*Character // user ID → character; only for players in the village
 	Rooms          map[string]string
 }
 
@@ -133,6 +134,10 @@ func (b *Bot) extractCommand(message *discordgo.MessageCreate, rawText []string)
 		}
 	case "village":
 		b.village(message, rawText)
+	case "character":
+		b.character(message, rawText)
+	case "whisper":
+		b.whisper(message)
 	case "pmove":
 	case "cmove":
 	default:
@@ -249,6 +254,9 @@ func (b *Bot) villageCreate(message *discordgo.MessageCreate) {
 	// Give the role to everyone in the new list, not just newcomers, so an earlier failure gets fixed.
 	roleErr := b.setPlayerRole(players, dropped)
 	b.settings.Players = players
+	for id := range dropped {
+		delete(b.settings.Characters, id)
+	}
 
 	var reply string
 	if len(players) == 0 {
@@ -324,6 +332,7 @@ func (b *Bot) villageRemove(message *discordgo.MessageCreate) {
 	roleErr := b.setPlayerRole(nil, removed)
 	for id := range removed {
 		delete(b.settings.Players, id)
+		delete(b.settings.Characters, id)
 	}
 
 	reply := fmt.Sprintf("Removed %d player(s)", len(removed))
@@ -620,6 +629,7 @@ func (b *Bot) unregister(message *discordgo.MessageCreate) {
 	b.settings.StoryTellerId = "UNSET"
 	b.settings.GameRegistered = false
 	b.settings.Players = nil
+	b.settings.Characters = nil
 	b.settings.Rooms = nil
 
 	fmt.Printf("The game at %s has been unregistered, %d game roles removed \n", guildID, removed)

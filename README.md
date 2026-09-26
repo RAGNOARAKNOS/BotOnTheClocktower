@@ -178,6 +178,11 @@ Every command starts with `!botc`, followed by the command name, e.g. `!botc pin
 | `!botc village add @player...` | Adds the mentioned users to the village and gives them `BoTC-Player`. Storyteller only, from the admin channel. |
 | `!botc village remove @player...` | Removes the mentioned users from the village and takes `BoTC-Player` away. Storyteller only, from the admin channel. |
 | `!botc village list` | Lists the village's players. Storyteller only, from the admin channel. |
+| `!botc character assign @player <Character>` | Stores a village player's character. Any lines after the first (Shift+Enter) are guidance, kept exactly as typed. Nothing is sent yet. Storyteller only, from the admin channel. |
+| `!botc character clear @player...` | Removes the stored characters. Storyteller only, from the admin channel. |
+| `!botc character list` | Lists each village player's character and whether it has been sent. Storyteller only, from the admin channel. |
+| `!botc character send [@player...]` | DMs every unsent character to its player, or resends to the mentioned players. Reports failures and players with no character. Storyteller only, from the admin channel. |
+| `!botc whisper @player <text>` | DMs a village player a secret message straight away. The text can span several lines. Storyteller only, from the admin channel. |
 
 Replies to a command always go to the channel the command was sent in.
 
@@ -202,7 +207,7 @@ For `!botc register` and `!botc map`, the voice channels must use these exact na
 | `RS` | Riverside |
 | `SC` | Storyteller's Corner |
 
-Game state, including the village's player list, is kept in memory only. If the bot restarts, run `!botc register`, `!botc map` and `!botc village create` again. A restart doesn't remove anyone's game roles; run `!botc unregister` first if you can.
+Game state, including the village's player list and characters, is kept in memory only. If the bot restarts, run `!botc register`, `!botc map` and `!botc village create` again, and reassign the characters. A restart doesn't remove anyone's game roles; run `!botc unregister` first if you can.
 
 ## Features
 
@@ -252,6 +257,24 @@ Spec: [village-management.md](docs/specs/village-management.md)
 ```
 
 The village is the list of players in the game. The Storyteller builds it from everyone in Town Square voice, then adds or removes players by hand. Players in the village have the `BoTC-Player` role. See [Commands](#commands).
+
+### Secret Characters
+
+Status: DONE
+
+Spec: [characters.md](docs/specs/characters.md)
+
+```shell
+!botc character assign @player Fortune Teller
+Each night, choose 2 players: you learn if either is a Demon.
+!botc character list
+!botc character send
+!botc whisper @player Your number tonight is 1.
+```
+
+The Storyteller gives each village player a character, optionally with guidance on the following lines. They check the list, then send them all at once. Each player gets theirs by direct message. `whisper` sends a player secret information during the game.
+
+Players must allow direct messages from server members (**Server → Privacy Settings → Direct Messages**). If a DM can't be delivered, the bot names the player so the Storyteller can fix it and send again.
 
 ### OBS Integration
 
