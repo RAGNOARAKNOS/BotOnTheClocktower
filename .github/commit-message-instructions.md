@@ -5,3 +5,4 @@
 - Keep the summary line under 72 characters, with no full stop at the end.
 - If the change needs explaining, add a body after a blank line. Say what changed and why, not how.
 - Mention the command or area affected where it helps, e.g. "Fix !botc map crashing when Town Square is missing".
+- Never add `Co-Authored-By` trailers or any attribution to Claude, GitHub Copilot or any other AI tool, in commit messages or pull request descriptions.

@@ -329,7 +329,7 @@ Workflow:
 3. **Changed your mind:** update the spec first (Behaviour or Rules, plus a dated line under Decisions), then change the code to match.
 4. **Finished:** set the status to DONE, fill in Implementation, update this README's [Commands](#commands) and [Features](#features) sections, and update the [UML diagrams](#uml-diagrams) (`/uml-sync`).
 
-The Claude Code instructions (CLAUDE.md) tell Claude to read the relevant spec before working on a feature, to ask about open questions rather than guess, and to record decisions in the spec as they're made.
+The AI agent instructions ([.github/copilot-instructions.md](.github/copilot-instructions.md), which Claude Code reads through [CLAUDE.md](CLAUDE.md)) tell agents to read the relevant spec before working on a feature, to ask about open questions rather than guess, and to record decisions in the spec as they're made.
 
 The detailed plan for OBS integration lives in [roadmap.md](roadmap.md), which its spec links to.
 

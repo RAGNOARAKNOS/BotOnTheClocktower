@@ -1,6 +1,6 @@
-# Copilot instructions
+# Project instructions
 
-> **Keep in sync with [CLAUDE.md](../CLAUDE.md).** This file and `CLAUDE.md` share the same project guidance. Whenever you change one, check the other and apply the equivalent update so they don't drift apart. Review both at the start of any session that touches project structure, commands, workflow, or conventions.
+The single source of project guidance for AI coding agents. GitHub Copilot reads this file directly, and `CLAUDE.md` imports it for Claude Code, so edit this file rather than `CLAUDE.md`. Paths are relative to the repository root.
 
 ## Language: British English
 
@@ -20,7 +20,7 @@ Write all prose in British English. This covers code comments, doc comments, Mar
 
 ## Commit messages
 
-Commit messages follow [.github/commit-message-instructions.md](commit-message-instructions.md).
+Commit messages follow `.github/commit-message-instructions.md` (Copilot's commit message generator reads it through `.vscode/settings.json`).
 
 ## What this is
 
@@ -40,17 +40,17 @@ Configuration: `BOTAPIKEY` (Discord bot token), read from the environment or fro
 
 ## Layout
 
-- [cmd/bot/main.go](cmd/bot/main.go) — entry point: `config.Load()` then `bot.Run(settings)`.
-- [internal/config/config.go](internal/config/config.go) — loads `.env` (a missing file is fine), fills `bot.Settings` with the token and `"UNSET"` placeholders for guild/admin channel/game channel/storyteller IDs.
-- [internal/bot/bot.go](internal/bot/bot.go) — `Settings`, the `Bot` struct, Discord session setup, message handling, and most command implementations.
-- [internal/bot/characters.go](internal/bot/characters.go) — the `character` and `whisper` commands, raw-message parsing (`parseAssignment`, `parseWhisper`) and DM helpers; tests in `characters_test.go`.
-- [docs/uml/](docs/uml/README.md) — Mermaid UML activity and sequence diagrams of how the code works at runtime, with a source map from Go functions to diagrams.
+- `cmd/bot/main.go` — entry point: `config.Load()` then `bot.Run(settings)`.
+- `internal/config/config.go` — loads `.env` (a missing file is fine), fills `bot.Settings` with the token and `"UNSET"` placeholders for guild/admin channel/game channel/storyteller IDs.
+- `internal/bot/bot.go` — `Settings`, the `Bot` struct, Discord session setup, message handling, and most command implementations.
+- `internal/bot/characters.go` — the `character` and `whisper` commands, raw-message parsing (`parseAssignment`, `parseWhisper`) and DM helpers; tests in `characters_test.go`.
+- `docs/uml/` — Mermaid UML activity and sequence diagrams of how the code works at runtime, with a source map from Go functions to diagrams.
 
 Note that `config` imports `bot` (for `bot.Settings`), so `bot` must not import `config`.
 
 ## Feature specs
 
-Intended behaviour lives in [docs/specs/](docs/specs/), one file per feature (index and workflow in [docs/specs/README.md](docs/specs/README.md), template in `_template.md`). The project README describes what's built; specs describe what's intended.
+Intended behaviour lives in `docs/specs/`, one file per feature (index and workflow in `docs/specs/README.md`, template in `_template.md`). The project README describes what's built; specs describe what's intended.
 
 - Before working on a feature, read its spec. Treat "Open questions" as undecided: ask rather than guess.
 - When the user decides something or changes their mind, update the spec: Behaviour/Rules, plus a dated line under Decisions.
@@ -80,17 +80,17 @@ Intended behaviour lives in [docs/specs/](docs/specs/), one file per feature (in
 
 ## Things to know before changing code
 
-- **Command syntax differs from the README.** The README documents `!gather` / `!bedtime`; the code actually expects `!botc <command>`. Keep them in sync when adding commands.
+- **Keep the README in step.** Every command is `!botc <command>`. When you add or change a command, update the README's Commands table (and its Features section if the feature's status changes).
 - **Game state is in-memory only** in `Bot.settings` and is lost on restart. Only touch it from within command handling, where `Bot.mu` is held; add locking if you ever read it from another handler or goroutine.
 - **Incomplete pieces:** only `unregister`, `village`, `character`, `grimoire` and `whisper` are restricted to the Storyteller; `villageCodeLookup` has no "Cottage-XX" entries even though the planned features rely on them.
 - **Error handling:** don't `panic`; return errors and reply to the channel. Many Discord call return values (mostly message sends) are still ignored.
-- **UML diagrams:** when you change a function listed in the source map in [docs/uml/README.md](docs/uml/README.md), update the affected diagrams in the same change; when you add a command, add its diagram and a source-map row. `/uml-sync [ref]` (Claude Code, [.claude/commands/uml-sync.md](.claude/commands/uml-sync.md)) and the Copilot prompt [.github/prompts/uml-sync.prompt.md](.github/prompts/uml-sync.prompt.md) do this from a git diff; keep those two in step. Diagrams follow the notation in the UML README; validate with `docker run --rm -v "$PWD/docs/uml:/data" minlag/mermaid-cli -i /data/<file>.md -o /tmp/<file>.md`.
+- **UML diagrams:** when you change a function listed in the source map in `docs/uml/README.md`, update the affected diagrams in the same change; when you add a command, add its diagram and a source-map row. The steps, including how to validate the Mermaid, are in that README's *Sync procedure*; `/uml-sync` (Claude Code) and the `uml-sync` prompt (Copilot) run it.
 - Lots of `fmt.Print*` debug output — there's no structured logging yet.
 - The module path is `github.com/RAGNOARAKNOS/BotOnTheClocktower` (uppercase), even though the local checkout directory is lowercase. Use the module path in imports.
 
 ## Roadmap: OBS integration
 
-[roadmap.md](roadmap.md) plans OBS control through obs-websocket v5, using `github.com/andreykaipov/goobs`. None of it is built yet. The plan:
+`roadmap.md` plans OBS control through obs-websocket v5, using `github.com/andreykaipov/goobs`. None of it is built yet. The plan:
 
 - A new `internal/obs` package (`client.go` for the connection and reconnects, `actions.go` for scenes, sources, audio and recording) that must never import `internal/bot`. `Bot` gets an `*obs.Client` field.
 - New env vars `OBS_HOST` (default `localhost:4455`), `OBS_PASSWORD`, `OBS_ENABLED` (default `false`), and later `OBS_SCENE_*` and `OBS_ROSTER_SOURCE`. The roadmap also plans a `.env.example` file.
@@ -106,7 +106,7 @@ Where the roadmap doesn't match the current code:
 
 ## CI/CD
 
-- [.github/workflows/release.yml](.github/workflows/release.yml): on push of a `v*` tag, runs `go test ./...`, cross-compiles linux/windows amd64 binaries (`CGO_ENABLED=0`), and creates a GitHub Release with them.
-- [.github/workflows/container.yml](.github/workflows/container.yml): on a published release, builds the [Dockerfile](Dockerfile) and pushes to `ghcr.io/<owner>/botontheclocktower` tagged with the version, `major.minor`, and `latest`.
-- [.github/workflows/docs.yml](.github/workflows/docs.yml): on pushes to `main` and PRs touching Go code or `docs/uml/`, renders every Mermaid diagram with mermaid-cli (a syntax error fails the build) and warns if Go code changed without `docs/uml/` changing.
+- `.github/workflows/release.yml`: on push of a `v*` tag, runs `go test ./...`, cross-compiles linux/windows amd64 binaries (`CGO_ENABLED=0`), and creates a GitHub Release with them.
+- `.github/workflows/container.yml`: on a published release, builds the `Dockerfile` and pushes to `ghcr.io/<owner>/botontheclocktower` tagged with the version, `major.minor`, and `latest`.
+- `.github/workflows/docs.yml`: on pushes to `main` and PRs touching Go code or `docs/uml/`, renders every Mermaid diagram with mermaid-cli (a syntax error fails the build) and warns if Go code changed without `docs/uml/` changing.
 - Go version comes from `go.mod` (1.27.1); the Dockerfile uses `golang:1.27-alpine`. Update both together.
