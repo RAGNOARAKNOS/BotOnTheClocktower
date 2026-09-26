@@ -2,7 +2,7 @@
 
 [← UML index](README.md)
 
-The Storyteller gives each village player a secret character and team, sends them by DM, and tracks deaths and ghost votes. Covers [internal/bot/characters.go](../../internal/bot/characters.go). Spec: [characters.md](../specs/characters.md).
+The Storyteller gives each village player a secret character and team, sends them by DM, and tracks deaths and ghost votes. Covers [internal/bot/characters.go](../../internal/bot/characters.go), [internal/bot/grimoire.go](../../internal/bot/grimoire.go), [internal/bot/whisper.go](../../internal/bot/whisper.go) and [internal/bot/parse.go](../../internal/bot/parse.go). Spec: [characters.md](../specs/characters.md).
 
 Like every command, `character`, `grimoire` and `whisper` only run for the Storyteller in the admin channel; [`commandAllowed`](command-dispatch.md#activity-commandallowed) checks that before they're called. A character (`Game.Characters`, user ID → `*Character`) holds these fields:
 

@@ -44,5 +44,5 @@ Rules shared by every command: how messages are recognised as commands, and how 
 
 ## Implementation
 
-- `newMessage`, `extractCommand` and `commandAllowed` (the access check) in [internal/bot/bot.go](../../internal/bot/bot.go).
+- `newMessage`, `extractCommand` and `commandAllowed` (the access check) in [internal/bot/commands.go](../../internal/bot/commands.go); `newMessage` in [internal/bot/bot.go](../../internal/bot/bot.go).
 - Message content is never logged, because whispers and character guidance are secret. Send failures are logged by the `reply`/`send` helpers.

@@ -2,7 +2,7 @@
 
 [← UML index](README.md)
 
-The village is the list of players in the game (`Game.Players`, user ID → display name). Players in the village have the `BoTC-Player` role. Covers `village`, `villageCreate`, `villageAdd`, `villageRemove`, `setPlayerRole` and `lookupMember` in [internal/bot/bot.go](../../internal/bot/bot.go). Spec: [village-management.md](../specs/village-management.md).
+The village is the list of players in the game (`Game.Players`, user ID → display name). Players in the village have the `BoTC-Player` role. Covers `village`, `villageCreate`, `villageAdd`, `villageRemove`, `setPlayerRole` and `lookupMember` in [internal/bot/village.go](../../internal/bot/village.go), [internal/bot/roles.go](../../internal/bot/roles.go) and [internal/bot/discord.go](../../internal/bot/discord.go). Spec: [village-management.md](../specs/village-management.md).
 
 ## Activity: `village` dispatch
 

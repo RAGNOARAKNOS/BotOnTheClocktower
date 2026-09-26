@@ -358,6 +358,6 @@ Keeping them current:
 
 ### Anatomy of a command
 
-Messages are split into words with [`strings.Fields`](https://pkg.go.dev/strings#Fields). If the first word is `!botc` (ignoring case) and there is at least one more word, the second word is the command name, dispatched in `extractCommand` in [internal/bot/bot.go](internal/bot/bot.go). Any further words are available as arguments. [command-dispatch.md](docs/uml/command-dispatch.md) shows the whole flow.
+Messages are split into words with [`strings.Fields`](https://pkg.go.dev/strings#Fields). If the first word is `!botc` (ignoring case) and there is at least one more word, the second word is the command name, dispatched in `extractCommand` in [internal/bot/commands.go](internal/bot/commands.go). Any further words are available as arguments. [command-dispatch.md](docs/uml/command-dispatch.md) shows the whole flow.
 
 <https://www.educative.io/answers/how-to-split-a-string-in-golang>

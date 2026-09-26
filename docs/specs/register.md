@@ -65,5 +65,5 @@ Steps:
 
 ## Implementation
 
-- `register`, `findVoiceChannelID`, `assignStorytellerRole`, `findRoleID` in [internal/bot/bot.go](../../internal/bot/bot.go).
+- `register`, `newGame` in [internal/bot/game.go](../../internal/bot/game.go); `findVoiceChannelID` in [internal/bot/discord.go](../../internal/bot/discord.go); `assignStorytellerRole`, `findRoleID` in [internal/bot/roles.go](../../internal/bot/roles.go).
 - State is in memory only, so a restart forgets the game (but not the roles it gave out).

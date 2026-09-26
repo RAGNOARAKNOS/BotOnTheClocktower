@@ -1,14 +1,10 @@
 package bot
 
 import (
-	"errors"
 	"fmt"
 	"log"
-	"regexp"
 	"slices"
 	"strings"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -50,114 +46,6 @@ const (
 		"`!botc character list` (or `!botc grimoire`), `!botc character send [@player...]`"
 	whisperUsage = "Usage: `!botc whisper @player <text>` (the text can span several lines)"
 )
-
-// mentionPattern matches a user mention as it appears in raw message content.
-var mentionPattern = regexp.MustCompile(`<@!?(\d+)>`)
-
-// teamWordNames are characters whose names start with a team word, so that
-// `assign @player Evil Twin` isn't read as team Evil, character "Twin".
-var teamWordNames = map[string]Team{
-	"evil twin": TeamEvil,
-}
-
-// parseTeam reads "good" or "evil", ignoring capitals.
-func parseTeam(word string) (Team, bool) {
-	switch strings.ToLower(word) {
-	case "good":
-		return TeamGood, true
-	case "evil":
-		return TeamEvil, true
-	}
-	return "", false
-}
-
-// splitTeam takes the optional team word off the front of a character name.
-// Without one, the character is Good.
-func splitTeam(name string) (Team, string, error) {
-	if team, ok := teamWordNames[strings.ToLower(name)]; ok {
-		return team, name, nil
-	}
-
-	first, rest := name, ""
-	if i := strings.IndexFunc(name, unicode.IsSpace); i >= 0 {
-		first, rest = name[:i], strings.TrimSpace(name[i:])
-	}
-
-	team, isTeam := parseTeam(first)
-	if !isTeam {
-		return TeamGood, name, nil
-	}
-	if rest == "" {
-		return "", "", errors.New("put the character's name after the team")
-	}
-	return team, rest, nil
-}
-
-// splitAtMention finds the first user mention on the first line of a raw command
-// message. It returns the mentioned user's ID, the rest of that line, and the
-// lines after it, untouched.
-func splitAtMention(content string) (userID, restOfLine, laterLines string, err error) {
-	content = strings.ReplaceAll(content, "\r\n", "\n")
-	firstLine, laterLines, _ := strings.Cut(content, "\n")
-
-	match := mentionPattern.FindStringSubmatchIndex(firstLine)
-	if match == nil {
-		return "", "", "", errors.New("mention the player on the first line")
-	}
-
-	restOfLine = firstLine[match[1]:]
-	if mentionPattern.MatchString(restOfLine) {
-		return "", "", "", errors.New("mention exactly one player")
-	}
-
-	return firstLine[match[2]:match[3]], strings.TrimSpace(restOfLine), laterLines, nil
-}
-
-// parseAssignment reads `!botc character assign @player [good|evil] <Character>`
-// plus optional guidance on the following lines.
-func parseAssignment(content string) (userID string, team Team, name, guidance string, err error) {
-	userID, name, guidance, err = splitAtMention(content)
-	if err != nil {
-		return "", "", "", "", err
-	}
-	if name == "" {
-		return "", "", "", "", errors.New("put the character's name after the mention, on the same line")
-	}
-
-	team, name, err = splitTeam(name)
-	if err != nil {
-		return "", "", "", "", err
-	}
-
-	guidance = strings.TrimSpace(guidance)
-	switch {
-	case utf8.RuneCountInString(name) > maxCharacterName:
-		return "", "", "", "", fmt.Errorf("the character's name is longer than %d characters", maxCharacterName)
-	case utf8.RuneCountInString(guidance) > maxEmbedDescription:
-		return "", "", "", "", fmt.Errorf("the guidance is longer than Discord's limit of %d characters", maxEmbedDescription)
-	}
-
-	return userID, team, name, guidance, nil
-}
-
-// parseWhisper reads `!botc whisper @player <text>`, where the text starts after
-// the mention and can carry on over the following lines.
-func parseWhisper(content string) (userID, text string, err error) {
-	userID, restOfLine, laterLines, err := splitAtMention(content)
-	if err != nil {
-		return "", "", err
-	}
-
-	text = strings.TrimSpace(restOfLine + "\n" + laterLines)
-	switch {
-	case text == "":
-		return "", "", errors.New("there's nothing to whisper")
-	case utf8.RuneCountInString(text) > maxEmbedDescription:
-		return "", "", fmt.Errorf("the message is longer than Discord's limit of %d characters", maxEmbedDescription)
-	}
-
-	return userID, text, nil
-}
 
 // character dispatches the character subcommands.
 func (b *Bot) character(message *discordgo.MessageCreate, rawText []string) {
@@ -391,91 +279,6 @@ func (b *Bot) characterClear(message *discordgo.MessageCreate) {
 	b.reply(message, reply)
 }
 
-// characterList replies with the grimoire: every village player's character,
-// team, life state and whether it has been sent, with totals at the top.
-func (b *Bot) characterList(message *discordgo.MessageCreate) {
-	if len(b.game.Players) == 0 {
-		b.reply(message, "The village is empty. Use `!botc village create` first.")
-		return
-	}
-
-	lines := []string{"Grimoire: " + grimoireSummary(b.game.Players, b.game.Characters)}
-	for i, id := range b.sortedPlayerIDs() {
-		line := fmt.Sprintf("%d. %s: ", i+1, b.game.Players[id])
-		if c, ok := b.game.Characters[id]; ok {
-			line += grimoireLine(c)
-		} else {
-			line += "none"
-		}
-		lines = append(lines, line)
-	}
-
-	for _, chunk := range chunkLines(lines, maxMessageLength) {
-		b.reply(message, chunk)
-	}
-}
-
-// grimoireLine describes one character, e.g. "Monk (Good) · Dead, ghost vote used · sent · death not announced".
-func grimoireLine(c *Character) string {
-	parts := []string{fmt.Sprintf("%s (%s)", c.Name, c.Team)}
-
-	if c.Alive {
-		parts = append(parts, "Alive")
-	} else {
-		parts = append(parts, "Dead, ghost vote "+ghostVoteState(c))
-	}
-
-	if c.Sent {
-		parts = append(parts, "sent")
-	} else {
-		parts = append(parts, "not sent")
-	}
-
-	if c.Guidance != "" {
-		parts = append(parts, "has guidance")
-	}
-
-	switch {
-	case !c.Alive && c.AnnouncedAlive:
-		parts = append(parts, "death not announced")
-	case c.Alive && !c.AnnouncedAlive:
-		parts = append(parts, "revival not announced")
-	}
-
-	return strings.Join(parts, " · ")
-}
-
-// grimoireSummary totals the characters, e.g. "Alive 6/8 · Good 5 · Evil 3 · 1 change not yet announced".
-func grimoireSummary(players map[string]string, chars map[string]*Character) string {
-	alive, good, evil, pending := 0, 0, 0, 0
-	for id := range players {
-		c, ok := chars[id]
-		if !ok {
-			continue
-		}
-		if c.Alive {
-			alive++
-		}
-		if c.Team == TeamEvil {
-			evil++
-		} else {
-			good++
-		}
-		if c.Alive != c.AnnouncedAlive {
-			pending++
-		}
-	}
-
-	summary := fmt.Sprintf("Alive %d/%d · Good %d · Evil %d", alive, good+evil, good, evil)
-	if unassigned := len(players) - (good + evil); unassigned > 0 {
-		summary += fmt.Sprintf(" · %d without a character", unassigned)
-	}
-	if pending > 0 {
-		summary += fmt.Sprintf(" · %d change(s) not yet announced", pending)
-	}
-	return summary
-}
-
 // pendingLifeChanges returns the names of village players who have died or
 // come back to life since the last announcement, each sorted by name.
 func pendingLifeChanges(players map[string]string, chars map[string]*Character) (died, revived []string) {
@@ -493,38 +296,6 @@ func pendingLifeChanges(players map[string]string, chars map[string]*Character) 
 	slices.Sort(died)
 	slices.Sort(revived)
 	return died, revived
-}
-
-// ghostVoteState describes a dead player's ghost vote.
-func ghostVoteState(c *Character) string {
-	if c.GhostVoteUsed {
-		return "used"
-	}
-	return "available"
-}
-
-// chunkLines joins lines with newlines into messages no longer than limit.
-// A single line longer than limit is cut.
-func chunkLines(lines []string, limit int) []string {
-	var chunks []string
-	var sb strings.Builder
-	for _, line := range lines {
-		if len(line) > limit {
-			line = line[:limit]
-		}
-		if sb.Len() > 0 && sb.Len()+1+len(line) > limit {
-			chunks = append(chunks, sb.String())
-			sb.Reset()
-		}
-		if sb.Len() > 0 {
-			sb.WriteByte('\n')
-		}
-		sb.WriteString(line)
-	}
-	if sb.Len() > 0 {
-		chunks = append(chunks, sb.String())
-	}
-	return chunks
 }
 
 // mentionedCharacters returns the IDs of the mentioned players who have a
@@ -600,58 +371,6 @@ func (b *Bot) characterSend(message *discordgo.MessageCreate) {
 		reply += "\nVillage players with no character yet: " + strings.Join(missing, ", ")
 	}
 	b.reply(message, reply)
-}
-
-// whisper DMs a village player a secret message from the Storyteller straight away.
-func (b *Bot) whisper(message *discordgo.MessageCreate) {
-	userID, text, err := parseWhisper(message.Content)
-	if err != nil {
-		b.reply(message, fmt.Sprintf("Could not read that (%v). %s", err, whisperUsage))
-		return
-	}
-
-	playerName, ok := b.game.Players[userID]
-	if !ok {
-		b.reply(message, fmt.Sprintf("<@%s> isn't in the village. This command will not execute", userID))
-		return
-	}
-
-	if err := b.sendDM(userID, b.dmEmbed("A message from the Storyteller", text)); err != nil {
-		log.Printf("Could not whisper to %s: %v", userID, err)
-		b.reply(message, fmt.Sprintf("Could not whisper to %s (%s).", playerName, dmErrorReason(err)))
-		return
-	}
-
-	b.reply(message, fmt.Sprintf("Whispered to %s.", playerName))
-}
-
-// sendDM sends an embed to the user in a direct message.
-func (b *Bot) sendDM(userID string, embed *discordgo.MessageEmbed) error {
-	channel, err := b.discord.UserChannelCreate(userID)
-	if err != nil {
-		return err
-	}
-
-	_, err = b.discord.ChannelMessageSendEmbed(channel.ID, embed)
-	return err
-}
-
-// dmEmbed builds a DM embed, with the game's server named in the footer.
-func (b *Bot) dmEmbed(title, description string) *discordgo.MessageEmbed {
-	embed := &discordgo.MessageEmbed{Title: title, Description: description}
-	if guild, err := b.discord.State.Guild(b.game.GuildID); err == nil {
-		embed.Footer = &discordgo.MessageEmbedFooter{Text: "Blood on the Clocktower on " + guild.Name}
-	}
-	return embed
-}
-
-// dmErrorReason turns a failed DM into a short reason for the Storyteller.
-func dmErrorReason(err error) string {
-	var restErr *discordgo.RESTError
-	if errors.As(err, &restErr) && restErr.Message != nil && restErr.Message.Code == discordgo.ErrCodeCannotSendMessagesToThisUser {
-		return "they don't accept DMs from this server"
-	}
-	return err.Error()
 }
 
 // playerName returns the village name for the user, or fallback if they aren't in the village.

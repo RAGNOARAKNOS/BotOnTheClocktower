@@ -40,10 +40,15 @@ Configuration: `BOTAPIKEY` (Discord bot token), read from the environment or fro
 
 ## Layout
 
-- `cmd/bot/main.go` — entry point: `config.Load()` then `bot.Run(settings)`.
+- `cmd/bot/main.go` — entry point: `config.Load()` then `bot.Run(cfg.Token)`.
 - `internal/config/config.go` — loads `.env` (a missing file is fine) and returns a `Config` holding the bot token.
-- `internal/bot/bot.go` — `Game` (the registered game's state), the `Bot` struct, Discord session setup, message handling, and most command implementations.
-- `internal/bot/characters.go` — the `character` and `whisper` commands, raw-message parsing (`parseAssignment`, `parseWhisper`) and DM helpers; tests in `characters_test.go`.
+- `internal/bot/` — one package, one file per feature. Keep files under about 300 lines; add a new file for a new feature.
+  - `bot.go` — the `Bot` struct, `Run` (session setup) and `newMessage` (lock, recover).
+  - `commands.go` — `extractCommand` (dispatch), `commandAllowed` (access), and the `reply`/`send` helpers.
+  - `game.go` — `Game` (the registered game's state), `register`, `unregister`, `sitrep`, `map`.
+  - `village.go` — the `village` commands. `roles.go` — Discord role lookups and changes. `discord.go` — member and channel lookups.
+  - `characters.go` — the `character` commands and `Character`. `grimoire.go` — `character list`/`grimoire` output. `whisper.go` — `whisper` and the DM helpers.
+  - `parse.go` — parsing raw message content (mentions, assignments, whispers). Tests sit next to the code: `parse_test.go`, `grimoire_test.go`, `characters_test.go`.
 - `docs/uml/` — Mermaid UML activity and sequence diagrams of how the code works at runtime, with a source map from Go functions to diagrams.
 
 `config` and `bot` don't import each other; `main` passes the token from one to the other.

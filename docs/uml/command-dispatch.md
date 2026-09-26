@@ -2,7 +2,7 @@
 
 [← UML index](README.md)
 
-How a Discord message becomes a command. Covers `newMessage`, `extractCommand` and `commandAllowed` in [internal/bot/bot.go](../../internal/bot/bot.go).
+How a Discord message becomes a command. Covers `newMessage`, `extractCommand` and `commandAllowed` in [internal/bot/commands.go](../../internal/bot/commands.go), and `newMessage` in [internal/bot/bot.go](../../internal/bot/bot.go).
 
 ## Activity: handling a message
 

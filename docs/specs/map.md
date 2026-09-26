@@ -57,6 +57,6 @@ Steps:
 
 ## Implementation
 
-- `mapRooms`, `getMapGuildChannels`, `villageCodeLookup` in [internal/bot/bot.go](../../internal/bot/bot.go).
+- `mapRooms`, `villageCodeLookup` in [internal/bot/game.go](../../internal/bot/game.go); `getMapGuildChannels` in [internal/bot/discord.go](../../internal/bot/discord.go).
 - Known gaps:
   - Matching ignores channel type. If a category or text channel shares a name, or two channels share a name, the recorded ID is unpredictable. `Rooms["TS"]` could differ from the game channel `register` chose.

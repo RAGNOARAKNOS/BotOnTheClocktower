@@ -126,8 +126,8 @@ Your number tonight is 1.
 
 ## Implementation
 
-- [internal/bot/characters.go](../../internal/bot/characters.go): `character` (dispatch), `characterAssign`, `characterTeam`, `characterSetAlive` (kill and revive), `characterGhostVote`, `characterAnnounce`, `characterClear`, `characterList`, `characterSend`, `whisper`. `!botc grimoire` in `extractCommand` calls `characterList`.
-- Parsing: `splitAtMention` finds the single mention on the first line (`<@id>` or `<@!id>`); `parseAssignment` and `parseWhisper` build on it and enforce the length limits. `splitTeam` takes off the optional team word, with `teamWordNames` for names that start with one ("Evil Twin"). Tests are in `characters_test.go`.
+- [internal/bot/characters.go](../../internal/bot/characters.go): `character` (dispatch), `characterAssign`, `characterTeam`, `characterSetAlive` (kill and revive), `characterGhostVote`, `characterAnnounce`, `characterClear`, `characterSend`. `characterList` (the grimoire) is in [internal/bot/grimoire.go](../../internal/bot/grimoire.go), and `whisper` and the DM helpers in [internal/bot/whisper.go](../../internal/bot/whisper.go). `!botc grimoire` in `extractCommand` calls `characterList`.
+- Parsing: `splitAtMention` finds the single mention on the first line (`<@id>` or `<@!id>`); `parseAssignment` and `parseWhisper` build on it and enforce the length limits. `splitTeam` takes off the optional team word, with `teamWordNames` for names that start with one ("Evil Twin"). These are in [internal/bot/parse.go](../../internal/bot/parse.go), with tests in `parse_test.go`.
 - Life state: `Alive` and `AnnouncedAlive` (the state at the last `announce`). `pendingLifeChanges` lists the players where they differ; `announce` only marks them announced once the post succeeds.
 - Grimoire: `grimoireSummary` (totals), `grimoireLine` (one per player), `chunkLines` (keeps each reply under Discord's 2000-character limit).
 - Delivery: `sendDM` (`UserChannelCreate` + `ChannelMessageSendEmbed`), `dmEmbed` (footer names the server), `dmErrorReason` (turns Discord error 50007 into "they don't accept DMs from this server").

@@ -2,7 +2,7 @@
 
 [← UML index](README.md)
 
-Starting and ending a game, and the commands that report on it or prepare it. Covers `register`, `unregister`, `removeGameRoles`, `mapRooms`, `sitrep` and their helpers in [internal/bot/bot.go](../../internal/bot/bot.go). The bot runs one game at a time.
+Starting and ending a game, and the commands that report on it or prepare it. Covers `register`, `unregister`, `removeGameRoles`, `mapRooms`, `sitrep` and their helpers in [internal/bot/game.go](../../internal/bot/game.go) and [internal/bot/roles.go](../../internal/bot/roles.go). The bot runs one game at a time.
 
 Every command here has already passed [`commandAllowed`](command-dispatch.md#activity-commandallowed): `register` runs from anywhere when no game is registered, and everything else, including `register` once a game exists, only runs for the Storyteller in the admin channel.
 

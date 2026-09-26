@@ -31,5 +31,5 @@ Channels and the Storyteller appear as clickable mentions. The server is shown a
 
 ## Implementation
 
-- `sitrep` in [internal/bot/bot.go](../../internal/bot/bot.go).
+- `sitrep` in [internal/bot/game.go](../../internal/bot/game.go).
 - It has no "no game" branch: the access check ignores it when no game is registered.
