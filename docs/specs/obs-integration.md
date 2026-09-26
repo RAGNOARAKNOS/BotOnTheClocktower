@@ -8,7 +8,7 @@ Control a local OBS instance from Discord (scenes, sources, audio, recording), a
 
 ## Behaviour
 
-The detailed plan lives in [roadmap.md](../../roadmap.md): architecture, configuration, five implementation phases with checklists, error handling and testing. Keep that file as the source of truth, and record decisions here or there, but not both.
+The detailed plan lives in [roadmap.md](../roadmap.md): architecture, configuration, five implementation phases with checklists, error handling and testing. Keep that file as the source of truth, and record decisions here or there, but not both.
 
 ## Open questions
 

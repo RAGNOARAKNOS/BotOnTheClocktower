@@ -296,7 +296,7 @@ Status: PLANNED
 
 Spec: [obs-integration.md](docs/specs/obs-integration.md)
 
-Control a local OBS instance from Discord (scene switching, audio and source control, recording), and change scenes automatically as the game moves between phases. See [roadmap.md](roadmap.md) for the plan.
+Control a local OBS instance from Discord (scene switching, audio and source control, recording), and change scenes automatically as the game moves between phases. See [docs/roadmap.md](docs/roadmap.md) for the plan.
 
 ### Vote tracking?
 
@@ -336,7 +336,7 @@ Workflow:
 
 The AI agent instructions ([.github/copilot-instructions.md](.github/copilot-instructions.md), which Claude Code reads through [CLAUDE.md](CLAUDE.md)) tell agents to read the relevant spec before working on a feature, to ask about open questions rather than guess, and to record decisions in the spec as they're made.
 
-The detailed plan for OBS integration lives in [roadmap.md](roadmap.md), which its spec links to.
+The detailed plan for OBS integration lives in [docs/roadmap.md](docs/roadmap.md), which its spec links to.
 
 ### UML diagrams
 

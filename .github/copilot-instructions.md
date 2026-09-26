@@ -63,24 +63,15 @@ Intended behaviour lives in `docs/specs/`, one file per feature (index and workf
 
 ## How the bot works
 
-- `bot.Run` opens a discordgo session with `IntentsAll`, registers a `Ready` handler and `newMessage`, then blocks until SIGINT/SIGTERM.
-- `newMessage` ignores messages from any bot (including itself), splits the content with `strings.Fields`, and dispatches when the first token equals `!botc` (case-insensitive) and there are at least two tokens. The second token, lowercased, is the command.
-- `newMessage` holds `Bot.mu` for the whole command, so commands run one at a time (discordgo runs each handler in its own goroutine). It also recovers panics, logging the stack and replying with an error, so a bug doesn't kill the bot and lose the in-memory game. Don't call anything that re-enters the message handler while holding the lock.
-- Access (`allowed`, a pure function checked in `extractCommand` for every command, tested in `commands_test.go`): with no game registered, only commands marked `beforeGame` (`register`/`start`, `ping`) run, from any channel, and everything else (including unknown commands) is ignored silently. Once registered, every command must come from `StorytellerID`, in `AdminChannelID`, in `GuildID`; commands marked `anyChannel` (`ping`) only need `StorytellerID`. Anything else gets a refusal reply. Command handlers don't repeat these checks.
-- Commands (entries in the `commands` table; every handler has the signature `func(b *Bot, message *discordgo.MessageCreate, words []string)`):
-  - `ping` → replies `pong`
-  - `register` / `start` → refused if `b.game` is already set, or if `findVoiceChannelID` can't find a voice channel named `villageCodeLookup["TS"]` (Town Square). Otherwise creates the game with `newGame` (admin channel = the message's channel, game channel = Town Square, Storyteller = the sender), posts a start announcement in the game channel, and gives the sender the `BoTC-StoryTeller` Discord role via `assignStorytellerRole` (looks the role up by exact name via `findRoleID`; role names are the `storytellerRoleName`/`playerRoleName` constants; if that fails, registration still succeeds and the reply includes a warning).
-  - `unregister` / `end` → `removeGameRoles` pages through all guild members (`GuildMembers`, 1000 per page) and strips both game roles from anyone who has them, collecting errors with `errors.Join` rather than stopping. Then it posts an end announcement in the game channel, sets `b.game` to nil, and replies with the count plus any warnings.
-  - `sitrep` → reports the guild, admin/game channels and Storyteller
-- The bot never joins voice; it has no audio features, and moving members (`GuildMemberMove`) doesn't require it. Don't add `ChannelVoiceJoin` back.
-- Channel routing: command replies go to the channel the command came from (so the admin channel, except for `register`, `ping` and refusals); admin output (e.g. `mapRooms`' TTS) goes to `AdminChannelID`; player-facing announcements go to `GameChannelID` (Town Square's text-in-voice chat).
-  - `map` → `mapRooms` resolves channel IDs for the names in `villageCodeLookup` (codes `TS`, `CA`, `CF`, `PS`, `TW`, `RS`, `SC`) into `Game.Rooms`. It doesn't touch players.
-  - `village create|add|remove|list` → maintains `Game.Players` (user ID → display name). `create` replaces the list with everyone in Town Square voice (`GameChannelID`, from the state cache's voice states) except the Storyteller and bots. `add`/`remove` take @mentions (`message.Mentions`). `setPlayerRole` gives or takes `BoTC-Player` to match; role failures only add a warning to the reply. Players dropped from the village lose their stored character.
-  - `character assign|team|kill|revive|ghostvote|announce|clear|list|send` → stores `Game.Characters` (user ID → `*Character{Name, Guidance, Team, Sent, Alive, AnnouncedAlive, GhostVoteUsed}`) for village players. `assign` parses the raw `message.Content` (not `strings.Fields`) so multi-line guidance and Markdown survive: an optional `good`/`evil` word (default Good; `splitTeam`, with `teamWordNames` for "Evil Twin") then the name follow the mention on the first line, and later lines are guidance. `send` DMs unsent characters as embeds (`sendDM`, title includes the team) and marks them sent; `send @player` resends; `team` marks a character unsent. A failed DM leaves the character unsent and is reported.
-  - Deaths: `kill`/`revive` only change `Alive`; `AnnouncedAlive` holds the state at the last `announce`, and `pendingLifeChanges` (where they differ) drives `announce` (posts to `GameChannelID`) and the grimoire. `revive` resets `GhostVoteUsed`.
-  - `grimoire` is an alias for `character list`: `grimoireSummary` totals plus a `grimoireLine` per player, split into 2000-character messages by `chunkLines`.
-  - `whisper @player <text>` → DMs a village player straight away; nothing is stored.
-  - anything else (reaching the switch) → "Huh? WTF is that command?!"
+This section covers the architecture and the rules to keep. For what each command does, see the README's Commands table; for step-by-step flows, see `docs/uml/`; for intended behaviour, see `docs/specs/`. Don't re-describe individual commands here.
+
+- **Flow:** `bot.Run` opens the discordgo session and blocks until SIGINT/SIGTERM. `newMessage` ignores bots, needs `!botc` (any case) plus a command word, takes `Bot.mu` for the whole command, and recovers panics. `extractCommand` looks the command up in the `commands` table, checks `allowed`, then calls the handler.
+- **One command at a time:** `Bot.mu` is held for the whole command, because discordgo runs each handler in its own goroutine. Don't call anything that re-enters the message handler while holding it.
+- **Access** is decided once, by `allowed`, from the command's table entry. With no game registered, only `beforeGame` commands (`register`/`start`, `ping`) run, and everything else is ignored silently. With a game, only the Storyteller in the admin channel may run commands (`anyChannel` commands, such as `ping`, from anywhere); anyone else gets a refusal.
+- **Channel routing:** replies go to the channel the command came from, via `b.reply`/`b.send`. Admin output goes to `Game.AdminChannelID`. Player-facing announcements go to `Game.GameChannelID` (Town Square's text-in-voice chat). Secrets (characters, whispers) go by DM.
+- **Parsing:** commands that take free text (`character assign`, `whisper`) parse the raw `message.Content` in `parse.go`, not the `strings.Fields` words, so multi-line text and Markdown survive. Players are named by @mention only.
+- **Voice:** the bot never joins voice. Moving members (`GuildMemberMove`) doesn't need it. Don't add `ChannelVoiceJoin` back.
+- **Discord roles** (`BoTC-StoryTeller`, `BoTC-Player`) are looked up by exact name. A role failure is a warning in the reply, never a failed command.
 
 ## Things to know before changing code
 
@@ -96,7 +87,7 @@ Intended behaviour lives in `docs/specs/`, one file per feature (index and workf
 
 ## Roadmap: OBS integration
 
-`roadmap.md` plans OBS control through obs-websocket v5, using `github.com/andreykaipov/goobs`. None of it is built yet. The plan:
+`docs/roadmap.md` plans OBS control through obs-websocket v5, using `github.com/andreykaipov/goobs`. None of it is built yet. The plan:
 
 - A new `internal/obs` package (`client.go` for the connection and reconnects, `actions.go` for scenes, sources, audio and recording) that must never import `internal/bot`. `Bot` gets an `*obs.Client` field.
 - New env vars `OBS_HOST` (default `localhost:4455`), `OBS_PASSWORD`, `OBS_ENABLED` (default `false`), and later `OBS_SCENE_*` and `OBS_ROSTER_SOURCE`. The roadmap also plans a `.env.example` file.
@@ -107,7 +98,7 @@ Intended behaviour lives in `docs/specs/`, one file per feature (index and workf
 Where the roadmap doesn't match the current code:
 
 - It says "add OBS config fields to Settings in config.go"; there's no `Settings` any more. Add them to `config.Config` and pass them to the bot from `main`.
-- It says to gate commands behind a "Storyteller check (same pattern as `register`)", but `register` has no such check. No per-command check is needed: an `obs` entry in the `commands` table is Storyteller-only, from the admin channel, by default.
+- It says to gate commands behind a "Storyteller check (same pattern as `register`)". No per-command check is needed: an `obs` entry in the `commands` table is Storyteller-only, from the admin channel, by default.
 - Phase 3 hooks into bedtime/wake commands that don't exist yet.
 
 ## CI/CD
