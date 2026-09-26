@@ -1,0 +1,63 @@
+name: Docs
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "docs/uml/**"
+      - "internal/**/*.go"
+      - "cmd/**/*.go"
+      - ".github/workflows/docs.yml"
+  pull_request:
+    paths:
+      - "docs/uml/**"
+      - "internal/**/*.go"
+      - "cmd/**/*.go"
+      - ".github/workflows/docs.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  uml:
+    name: Check UML diagrams
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Render Mermaid diagrams
+        run: |
+          # Chrome's sandbox isn't available on the Ubuntu runners.
+          echo '{"args": ["--no-sandbox"]}' > /tmp/puppeteer.json
+          mkdir -p /tmp/uml
+          for f in docs/uml/*.md; do
+            echo "::group::$f"
+            npx -y @mermaid-js/mermaid-cli -p /tmp/puppeteer.json -i "$f" -o "/tmp/uml/$(basename "$f")"
+            echo "::endgroup::"
+          done
+
+      - name: Warn if Go code changed without the diagrams
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="${{ github.event.pull_request.base.sha }}"
+          else
+            base="${{ github.event.before }}"
+          fi
+          if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            echo "No earlier commit to compare with; skipping."
+            exit 0
+          fi
+          changed=$(git diff --name-only "$base" HEAD)
+          if echo "$changed" | grep -E '^(internal|cmd)/.*\.go$' | grep -vqE '_test\.go$' \
+            && ! echo "$changed" | grep -q '^docs/uml/'; then
+            echo "::warning title=UML diagrams::Go code changed but docs/uml/ did not. If a command's flow changed, run /uml-sync (see docs/uml/README.md)."
+          fi

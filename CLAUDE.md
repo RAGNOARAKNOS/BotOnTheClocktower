@@ -26,6 +26,7 @@ Configuration: `BOTAPIKEY` (Discord bot token), read from the environment or fro
 - [internal/config/config.go](internal/config/config.go) — loads `.env` (a missing file is fine), fills `bot.Settings` with the token and `"UNSET"` placeholders for guild/admin channel/game channel/storyteller IDs.
 - [internal/bot/bot.go](internal/bot/bot.go) — `Settings`, the `Bot` struct, Discord session setup, message handling, and most command implementations.
 - [internal/bot/characters.go](internal/bot/characters.go) — the `character` and `whisper` commands, raw-message parsing (`parseAssignment`, `parseWhisper`) and DM helpers; tests in `characters_test.go`.
+- [docs/uml/](docs/uml/README.md) — Mermaid UML activity and sequence diagrams of how the code works at runtime, with a source map from Go functions to diagrams.
 
 Note that `config` imports `bot` (for `bot.Settings`), so `bot` must not import `config`.
 
@@ -35,7 +36,7 @@ Intended behaviour lives in [docs/specs/](docs/specs/), one file per feature (in
 
 - Before working on a feature, read its spec. Treat "Open questions" as undecided: ask rather than guess.
 - When the user decides something or changes their mind, update the spec: Behaviour/Rules, plus a dated line under Decisions.
-- When implementing, tick off "Done when" items; when a feature is finished, set Status to DONE, fill in Implementation, and update the project README.
+- When implementing, tick off "Done when" items; when a feature is finished, set Status to DONE, fill in Implementation, update the project README, and update the UML diagrams.
 
 ## How the bot works
 
@@ -65,6 +66,7 @@ Intended behaviour lives in [docs/specs/](docs/specs/), one file per feature (in
 - **Game state is in-memory only** in `Bot.settings` and is lost on restart. Only touch it from within command handling, where `Bot.mu` is held; add locking if you ever read it from another handler or goroutine.
 - **Incomplete pieces:** only `unregister`, `village`, `character`, `grimoire` and `whisper` are restricted to the Storyteller; `villageCodeLookup` has no "Cottage-XX" entries even though the planned features rely on them.
 - **Error handling:** don't `panic`; return errors and reply to the channel. Many Discord call return values (mostly message sends) are still ignored.
+- **UML diagrams:** when you change a function listed in the source map in [docs/uml/README.md](docs/uml/README.md), update the affected diagrams in the same change; when you add a command, add its diagram and a source-map row. `/uml-sync [ref]` (Claude Code, [.claude/commands/uml-sync.md](.claude/commands/uml-sync.md)) and the Copilot prompt [.github/prompts/uml-sync.prompt.md](.github/prompts/uml-sync.prompt.md) do this from a git diff; keep those two in step. Diagrams follow the notation in the UML README; validate with `docker run --rm -v "$PWD/docs/uml:/data" minlag/mermaid-cli -i /data/<file>.md -o /tmp/<file>.md`.
 - Lots of `fmt.Print*` debug output — there's no structured logging yet.
 - The module path is `github.com/RAGNOARAKNOS/BotOnTheClocktower` (uppercase), even though the local checkout directory is lowercase. Use the module path in imports.
 
@@ -88,4 +90,5 @@ Where the roadmap doesn't match the current code:
 
 - [.github/workflows/release.yml](.github/workflows/release.yml): on push of a `v*` tag, runs `go test ./...`, cross-compiles linux/windows amd64 binaries (`CGO_ENABLED=0`), and creates a GitHub Release with them.
 - [.github/workflows/container.yml](.github/workflows/container.yml): on a published release, builds the [Dockerfile](Dockerfile) and pushes to `ghcr.io/<owner>/botontheclocktower` tagged with the version, `major.minor`, and `latest`.
+- [.github/workflows/docs.yml](.github/workflows/docs.yml): on pushes to `main` and PRs touching Go code or `docs/uml/`, renders every Mermaid diagram with mermaid-cli (a syntax error fails the build) and warns if Go code changed without `docs/uml/` changing.
 - Go version comes from `go.mod` (1.27.1); the Dockerfile uses `golang:1.27-alpine`. Update both together.

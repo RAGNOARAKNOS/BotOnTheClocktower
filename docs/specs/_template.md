@@ -28,6 +28,7 @@ Examples:
 ## Done when
 
 - [ ] Concrete, checkable outcome
+- [ ] UML diagrams in [docs/uml/](../uml/README.md) updated (`/uml-sync`), including a source-map row for any new function
 
 ## Out of scope
 

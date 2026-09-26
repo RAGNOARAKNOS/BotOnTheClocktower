@@ -217,7 +217,7 @@ Game state, including the village's player list and characters, is kept in memor
 
 (Ordered by development priority)
 
-This section summarises each feature. The detailed intended behaviour, open questions and decisions for each one are in its spec under [docs/specs/](docs/specs/) (see [Feature specs](#feature-specs)).
+This section summarises each feature. The detailed intended behaviour, open questions and decisions for each one are in its spec under [docs/specs/](docs/specs/) (see [Feature specs](#feature-specs)). For how the built features work at runtime, see the [UML diagrams](#uml-diagrams).
 
 ### Gathering Players for the Tribunal
 
@@ -327,14 +327,32 @@ Workflow:
 1. **New feature:** copy the template, or describe the feature roughly and have it drafted into a spec. Fill in the behaviour, edge cases and "Done when" list, and leave anything undecided under Open questions.
 2. **Build in slices:** implement a few "Done when" items at a time and tick them off.
 3. **Changed your mind:** update the spec first (Behaviour or Rules, plus a dated line under Decisions), then change the code to match.
-4. **Finished:** set the status to DONE, fill in Implementation, and update this README's [Commands](#commands) and [Features](#features) sections.
+4. **Finished:** set the status to DONE, fill in Implementation, update this README's [Commands](#commands) and [Features](#features) sections, and update the [UML diagrams](#uml-diagrams) (`/uml-sync`).
 
 The Claude Code instructions (CLAUDE.md) tell Claude to read the relevant spec before working on a feature, to ask about open questions rather than guess, and to record decisions in the spec as they're made.
 
 The detailed plan for OBS integration lives in [roadmap.md](roadmap.md), which its spec links to.
 
+### UML diagrams
+
+[docs/uml/](docs/uml/README.md) shows how the bot works at runtime, as UML activity diagrams (the steps and decisions in each command) and sequence diagrams (the messages between the Storyteller, the bot, Discord and the players). They're written in Mermaid, so GitHub renders them in place.
+
+| Diagrams | Covers |
+| --- | --- |
+| [startup.md](docs/uml/startup.md) | Loading the configuration, connecting to Discord, shutting down |
+| [command-dispatch.md](docs/uml/command-dispatch.md) | How a message becomes a command, locking, panic recovery, the Storyteller check |
+| [game-lifecycle.md](docs/uml/game-lifecycle.md) | `register`, `unregister`, `map`, `sitrep` |
+| [village.md](docs/uml/village.md) | `village create`, `add`, `remove` |
+| [characters.md](docs/uml/characters.md) | `character` subcommands, `grimoire`, `whisper` |
+
+Keeping them current:
+
+- When a change alters a command's flow, update its diagram in the same commit. The source map in [docs/uml/README.md](docs/uml/README.md) lists which diagram covers which function.
+- `/uml-sync [git ref]` in Claude Code, or the `uml-sync` prompt in Copilot Chat, finds the diagrams affected by code changes since a ref, updates them, and checks that they render.
+- The [Docs workflow](.github/workflows/docs.yml) renders every diagram on each push and pull request, so a Mermaid syntax error fails CI. It also warns when Go code changes without any change to `docs/uml/`.
+
 ### Anatomy of a command
 
-Messages are split into words with [`strings.Fields`](https://pkg.go.dev/strings#Fields). If the first word is `!botc` (ignoring case) and there is at least one more word, the second word is the command name, dispatched in `extractCommand` in [internal/bot/bot.go](internal/bot/bot.go). Any further words are available as arguments.
+Messages are split into words with [`strings.Fields`](https://pkg.go.dev/strings#Fields). If the first word is `!botc` (ignoring case) and there is at least one more word, the second word is the command name, dispatched in `extractCommand` in [internal/bot/bot.go](internal/bot/bot.go). Any further words are available as arguments. [command-dispatch.md](docs/uml/command-dispatch.md) shows the whole flow.
 
 <https://www.educative.io/answers/how-to-split-a-string-in-golang>

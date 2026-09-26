@@ -7,7 +7,9 @@ One file per feature, describing what it should do. The project README describes
 - **New feature:** copy [_template.md](_template.md), or ask Claude to draft one from a rough description.
 - **Change of mind:** update the spec (Behaviour, Rules, and a dated line under Decisions), then ask Claude to implement the difference.
 - **Implementing:** work in slices, e.g. "implement the first two 'Done when' items in gather.md". Tick items off as they're done.
-- **Finished:** set Status to DONE, fill in Implementation, and make sure the project README describes it.
+- **Finished:** set Status to DONE, fill in Implementation, make sure the project README describes it, and update the UML diagrams (`/uml-sync`).
+
+How the built features work at runtime (activity and sequence diagrams) is in [docs/uml/](../uml/README.md).
 
 Status values: **IDEA** (not yet shaped) → **PLANNED** (agreed, not started) → **IN PROGRESS** → **DONE**.
 
