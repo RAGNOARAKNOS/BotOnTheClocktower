@@ -92,13 +92,7 @@ func (b *Bot) characterAssign(message *discordgo.MessageCreate) {
 		return
 	}
 
-	previous := b.game.Characters[userID]
-	c := &Character{Name: name, Guidance: guidance, Team: team, Alive: true, AnnouncedAlive: true}
-	if previous != nil {
-		// A new character doesn't bring anyone back to life.
-		c.Alive, c.AnnouncedAlive, c.GhostVoteUsed = previous.Alive, previous.AnnouncedAlive, previous.GhostVoteUsed
-	}
-	b.game.Characters[userID] = c
+	previous := b.game.Assign(userID, &Character{Name: name, Guidance: guidance, Team: team})
 
 	reply := fmt.Sprintf("%s will be the %s (%s", playerName, name, team)
 	if guidance != "" {
@@ -128,13 +122,10 @@ func (b *Bot) characterTeam(message *discordgo.MessageCreate, rawText []string) 
 	ids, skipped := b.mentionedCharacters(message)
 	var changed []string
 	for _, id := range ids {
-		c := b.game.Characters[id]
-		if c.Team == team {
+		if !b.game.SetTeam(id, team) {
 			skipped = append(skipped, fmt.Sprintf("%s (already %s)", b.game.Players[id], team))
 			continue
 		}
-		c.Team = team
-		c.Sent = false
 		changed = append(changed, b.game.Players[id])
 	}
 
@@ -164,14 +155,9 @@ func (b *Bot) characterSetAlive(message *discordgo.MessageCreate, alive bool) {
 	ids, skipped := b.mentionedCharacters(message)
 	var changed []string
 	for _, id := range ids {
-		c := b.game.Characters[id]
-		if c.Alive == alive {
+		if !b.game.SetAlive(id, alive) {
 			skipped = append(skipped, fmt.Sprintf("%s (already %s)", b.game.Players[id], state))
 			continue
-		}
-		c.Alive = alive
-		if alive {
-			c.GhostVoteUsed = false
 		}
 		changed = append(changed, b.game.Players[id])
 	}
@@ -184,7 +170,7 @@ func (b *Bot) characterSetAlive(message *discordgo.MessageCreate, alive bool) {
 	if len(skipped) > 0 {
 		reply += "\nSkipped: " + strings.Join(skipped, ", ")
 	}
-	died, revived := pendingLifeChanges(b.game.Players, b.game.Characters)
+	died, revived := b.game.PendingLifeChanges()
 	if pending := len(died) + len(revived); pending > 0 {
 		reply += fmt.Sprintf("\n%d change(s) waiting to be announced; use `!botc character announce`.", pending)
 	} else {
@@ -203,13 +189,11 @@ func (b *Bot) characterGhostVote(message *discordgo.MessageCreate) {
 	ids, skipped := b.mentionedCharacters(message)
 	var changed []string
 	for _, id := range ids {
-		c := b.game.Characters[id]
-		if c.Alive {
+		if !b.game.ToggleGhostVote(id) {
 			skipped = append(skipped, b.game.Players[id]+" (alive, so no ghost vote)")
 			continue
 		}
-		c.GhostVoteUsed = !c.GhostVoteUsed
-		changed = append(changed, fmt.Sprintf("%s: ghost vote %s", b.game.Players[id], ghostVoteState(c)))
+		changed = append(changed, fmt.Sprintf("%s: ghost vote %s", b.game.Players[id], ghostVoteState(b.game.Characters[id])))
 	}
 
 	reply := "No ghost votes changed."
@@ -225,7 +209,7 @@ func (b *Bot) characterGhostVote(message *discordgo.MessageCreate) {
 // characterAnnounce posts the deaths and revivals since the last announcement in
 // the game channel, then marks them announced.
 func (b *Bot) characterAnnounce(message *discordgo.MessageCreate) {
-	died, revived := pendingLifeChanges(b.game.Players, b.game.Characters)
+	died, revived := b.game.PendingLifeChanges()
 	if len(died)+len(revived) == 0 {
 		b.reply(message, "Nothing to announce: no deaths or revivals since the last announcement.")
 		return
@@ -246,9 +230,7 @@ func (b *Bot) characterAnnounce(message *discordgo.MessageCreate) {
 		return
 	}
 
-	for _, c := range b.game.Characters {
-		c.AnnouncedAlive = c.Alive
-	}
+	b.game.MarkAnnounced()
 	b.reply(message, fmt.Sprintf("Announced in <#%s>:\n%s", b.game.GameChannelID, announcement))
 }
 

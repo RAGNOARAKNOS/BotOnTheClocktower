@@ -160,4 +160,4 @@ sequenceDiagram
 
 ---
 
-Last checked against code: 2026-09-27 (6d82bd7)
+Last checked against code: 2026-09-27 (4bef1c8)

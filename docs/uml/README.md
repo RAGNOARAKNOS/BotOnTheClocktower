@@ -66,11 +66,11 @@ Which diagram covers which code. When you change one of these functions, update 
 | `unregister`, `removeGameRoles` | [game-lifecycle.md](game-lifecycle.md) |
 | `mapRooms`, `getMapGuildChannels`, `villageCodeLookup` | [game-lifecycle.md](game-lifecycle.md) |
 | `sitrep` | [game-lifecycle.md](game-lifecycle.md) |
-| `village`, `villageCreate`, `villageAdd`, `villageRemove` | [village.md](village.md) |
+| `village`, `villageCreate`, `villageAdd`, `villageRemove`, `Game.ReplacePlayers`, `Game.RemovePlayer` | [village.md](village.md) |
 | `setPlayerRole`, `replyWithRoleWarning`, `lookupMember`, `memberDisplayName` | [village.md](village.md) |
 | `character`, `characterAssign`, `parseAssignment`, `splitAtMention`, `splitTeam`, `parseTeam`, `teamWordNames` | [characters.md](characters.md) |
-| `characterSetAlive`, `characterGhostVote`, `characterTeam`, `mentionedCharacters` | [characters.md](characters.md) |
-| `characterAnnounce`, `pendingLifeChanges` | [characters.md](characters.md) |
+| `characterSetAlive`, `characterGhostVote`, `characterTeam`, `mentionedCharacters`, `Game.Assign`, `Game.SetAlive`, `Game.ToggleGhostVote`, `Game.SetTeam` | [characters.md](characters.md) |
+| `characterAnnounce`, `pendingLifeChanges`, `Game.PendingLifeChanges`, `Game.MarkAnnounced` | [characters.md](characters.md) |
 | `characterSend`, `sendDM`, `dmEmbed`, `dmErrorReason` | [characters.md](characters.md) |
 | `characterList`, `grimoireSummary`, `grimoireLine`, `chunkLines` | [characters.md](characters.md) |
 | `whisper`, `parseWhisper` | [characters.md](characters.md) |

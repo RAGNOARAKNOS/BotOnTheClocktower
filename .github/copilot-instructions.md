@@ -85,6 +85,7 @@ Intended behaviour lives in `docs/specs/`, one file per feature (index and workf
 ## Things to know before changing code
 
 - **Keep the README in step.** Every command is `!botc <command>`. When you add or change a command, update the README's Commands table (and its Features section if the feature's status changes).
+- **Game rules are `Game` methods** in `game.go` (`ReplacePlayers`, `RemovePlayer`, `Assign`, `SetTeam`, `SetAlive`, `ToggleGhostVote`, `MarkAnnounced`, `PendingLifeChanges`). They change only the `Game`, never Discord, and are tested in `game_test.go`. Handlers do the Discord side and build replies; put new rules on `Game`, not in a handler.
 - **Game state is in-memory only** in `Bot.game` (`nil` = no game registered) and is lost on restart. Only touch it from within command handling, where `Bot.mu` is held; add locking if you ever read it from another handler or goroutine.
 - **Adding a command** is one entry in the `commands` table in `commands.go`. By default it's Storyteller-only, from the admin channel, with a game registered; set `beforeGame` or `anyChannel` only when the spec says so, and add a case to `TestAllowed` if the access is new. Handlers need no access check of their own.
 - **Incomplete pieces:** `villageCodeLookup` has no "Cottage-XX" entries even though the planned features rely on them.

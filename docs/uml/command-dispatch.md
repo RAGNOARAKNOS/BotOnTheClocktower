@@ -114,4 +114,4 @@ flowchart TD
 
 ---
 
-Last checked against code: 2026-09-27 (7fa2732)
+Last checked against code: 2026-09-27 (4bef1c8)

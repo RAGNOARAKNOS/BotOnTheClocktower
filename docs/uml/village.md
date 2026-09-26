@@ -38,10 +38,9 @@ flowchart TD
     dbot -->|"[bot]"| next
     dbot -->|"[person, or couldn't be looked up]"| keep("Add to the new list, with their display name<br/>(or user ID if not found)")
     keep --> next
-    next -->|"[all checked]"| dropped("Dropped = old players not in the new list")
-    dropped --> role("setPlayerRole: give BoTC-Player to the new list,<br/>take it from the dropped players")
-    role --> replace("Players = the new list<br/>Delete the dropped players' characters")
-    replace --> reply("Reply: Village created with N player(s)<br/>(or: it is empty), who was dropped,<br/>and a warning if the role couldn't be fully updated")
+    next -->|"[all checked]"| replace("Game.ReplacePlayers: Players = the new list,<br/>dropped = old players not in it,<br/>delete the dropped players' characters")
+    replace --> role("setPlayerRole: give BoTC-Player to the new list,<br/>take it from the dropped players")
+    role --> reply("Reply: Village created with N player(s)<br/>(or: it is empty), who was dropped,<br/>and a warning if the role couldn't be fully updated")
     fail --> done(((" "))):::final
     reply --> done
 
@@ -72,7 +71,7 @@ sequenceDiagram
             end
         end
     end
-    Note over Bot: Skip bots. Work out who was dropped.
+    Note over Bot: Skip bots. Game.ReplacePlayers: Players = new list,<br/>return who was dropped and delete their Characters
     opt anyone to give or take the role from
         Bot->>REST: GuildRoles(guild), in findRoleID(BoTC-Player)
         REST-->>Bot: Roles
@@ -83,7 +82,6 @@ sequenceDiagram
             Bot->>REST: GuildMemberRoleRemove(guild, player, role)
         end
     end
-    Note over Bot: Game.Players = new list<br/>Delete the dropped players' Characters
     Bot->>REST: Reply "Village created with N player(s)..." (replyWithRoleWarning)
     REST-->>ST: Reply in the admin channel
 ```
@@ -123,7 +121,7 @@ flowchart TD
     skip --> next
     mark --> next
     next -->|"[no more mentions]"| role("setPlayerRole: take BoTC-Player<br/>from the players being removed")
-    role --> del("Delete them from Game.Players<br/>and delete their characters")
+    role --> del("Game.RemovePlayer for each:<br/>delete them from Players and their characters")
     del --> reply("Reply: Removed N player(s), who was skipped,<br/>and any role warning")
     usage --> done(((" "))):::final
     reply --> done
@@ -134,4 +132,4 @@ flowchart TD
 
 ---
 
-Last checked against code: 2026-09-27 (6d82bd7)
+Last checked against code: 2026-09-27 (4bef1c8)

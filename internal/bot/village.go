@@ -64,19 +64,9 @@ func (b *Bot) villageCreate(message *discordgo.MessageCreate) {
 		players[l.userID] = memberDisplayName(member, l.userID)
 	}
 
-	dropped := make(map[string]string)
-	for id, name := range b.game.Players {
-		if _, ok := players[id]; !ok {
-			dropped[id] = name
-		}
-	}
-
+	dropped := b.game.ReplacePlayers(players)
 	// Give the role to everyone in the new list, not just newcomers, so an earlier failure gets fixed.
 	roleErr := b.setPlayerRole(players, dropped)
-	b.game.Players = players
-	for id := range dropped {
-		delete(b.game.Characters, id)
-	}
 
 	var reply string
 	if len(players) == 0 {
@@ -147,8 +137,7 @@ func (b *Bot) villageRemove(message *discordgo.MessageCreate) {
 
 	roleErr := b.setPlayerRole(nil, removed)
 	for id := range removed {
-		delete(b.game.Players, id)
-		delete(b.game.Characters, id)
+		b.game.RemovePlayer(id)
 	}
 
 	reply := fmt.Sprintf("Removed %d player(s)", len(removed))

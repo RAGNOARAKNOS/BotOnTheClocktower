@@ -31,6 +31,94 @@ func newGame(guildID, adminChannelID, gameChannelID, storytellerID string) *Game
 	}
 }
 
+// The game's rules. These change only the Game, never Discord, so they can be
+// unit-tested; the command handlers do the Discord side and build the replies.
+
+// ReplacePlayers makes players the whole village and returns who was dropped.
+// Dropped players lose their characters.
+func (g *Game) ReplacePlayers(players map[string]string) (dropped map[string]string) {
+	dropped = make(map[string]string)
+	for id, name := range g.Players {
+		if _, ok := players[id]; !ok {
+			dropped[id] = name
+			delete(g.Characters, id)
+		}
+	}
+	g.Players = players
+	return dropped
+}
+
+// RemovePlayer takes a player out of the village, with their character.
+func (g *Game) RemovePlayer(userID string) {
+	delete(g.Players, userID)
+	delete(g.Characters, userID)
+}
+
+// Assign gives a village player a character, unsent, and returns the character it
+// replaces, if any. A new character starts alive; a replacement keeps the player's
+// life and ghost vote, because a new character doesn't bring anyone back to life.
+func (g *Game) Assign(userID string, c *Character) (previous *Character) {
+	previous = g.Characters[userID]
+	c.Sent = false
+	if previous != nil {
+		c.Alive, c.AnnouncedAlive, c.GhostVoteUsed = previous.Alive, previous.AnnouncedAlive, previous.GhostVoteUsed
+	} else {
+		c.Alive, c.AnnouncedAlive, c.GhostVoteUsed = true, true, false
+	}
+	g.Characters[userID] = c
+	return previous
+}
+
+// SetTeam moves a player's character to team and marks it unsent, so `send` tells
+// them. It returns false if the character was already on that team.
+func (g *Game) SetTeam(userID string, team Team) bool {
+	c := g.Characters[userID]
+	if c.Team == team {
+		return false
+	}
+	c.Team = team
+	c.Sent = false
+	return true
+}
+
+// SetAlive kills or revives a player's character; reviving gives back the ghost vote.
+// It returns false if the character was already in that state. Nothing is public
+// until MarkAnnounced.
+func (g *Game) SetAlive(userID string, alive bool) bool {
+	c := g.Characters[userID]
+	if c.Alive == alive {
+		return false
+	}
+	c.Alive = alive
+	if alive {
+		c.GhostVoteUsed = false
+	}
+	return true
+}
+
+// ToggleGhostVote switches a dead player's ghost vote between used and available.
+// It returns false, changing nothing, if the player is alive.
+func (g *Game) ToggleGhostVote(userID string) bool {
+	c := g.Characters[userID]
+	if c.Alive {
+		return false
+	}
+	c.GhostVoteUsed = !c.GhostVoteUsed
+	return true
+}
+
+// PendingLifeChanges returns who has died or come back since the last announcement.
+func (g *Game) PendingLifeChanges() (died, revived []string) {
+	return pendingLifeChanges(g.Players, g.Characters)
+}
+
+// MarkAnnounced records every character's current life state as announced.
+func (g *Game) MarkAnnounced() {
+	for _, c := range g.Characters {
+		c.AnnouncedAlive = c.Alive
+	}
+}
+
 var villageCodeLookup = map[string]string{
 	"TS": "Town Square",
 	"CA": "Cathedral",
