@@ -88,7 +88,7 @@ Per-channel permission overrides take priority over server-wide permissions. Mak
 - Whoever sends `!botc register` becomes the Storyteller for that game and is given the `BoTC-StoryTeller` role.
 - The bot runs one game at a time. Once a game is registered, `!botc register` is refused for everyone, including the current Storyteller.
 - To end the game, the Storyteller sends `!botc unregister` (or `!botc end`). This removes `BoTC-StoryTeller` and `BoTC-Player` from every member who has them, not just the ones the bot gave out. After that, anyone can register a new game.
-- Only the Storyteller can end the game. If they're unavailable, restart the bot and have a moderator remove the game roles by hand.
+- Only the Storyteller can end the game, or run any other command, and only from the admin channel. If they're unavailable, restart the bot and have a moderator remove the game roles by hand.
 
 ### Run the executable
 
@@ -165,38 +165,43 @@ triggers the container image build and push.
 
 ## Commands
 
-Every command starts with `!botc`, followed by the command name, e.g. `!botc ping`. Capitals don't matter (`!BotC Start` works). Messages from other bots are ignored. Send them in a text channel on the server where the game is being played.
+Every command starts with `!botc`, followed by the command name, e.g. `!botc ping`. Capitals don't matter (`!BotC Start` works). Messages from other bots are ignored.
+
+Commands only work from the admin channel, and only for the Storyteller:
+
+- **No game registered:** only `!botc register` (or `start`) and `!botc ping` work, from any channel. The channel `register` is sent from becomes the admin channel. Every other command is ignored, with no reply.
+- **Game registered:** every command must come from the Storyteller, in the admin channel, except `!botc ping`, which the Storyteller can send from any channel. Anyone else, or a command sent anywhere else, gets a reply naming the Storyteller and the admin channel, and the command doesn't run.
 
 | Command | What it does |
 | --- | --- |
-| `!botc ping` | Replies `pong`. Use it to check the bot is online. |
-| `!botc register` or `!botc start` | Starts a game. Makes the current channel the admin channel and the Town Square voice channel the game channel, and posts a "new game" announcement in Town Square's text chat. Makes the sender the Storyteller and gives them the `BoTC-StoryTeller` role. Run this before any other game command. Refused if a game is already registered, or if there's no voice channel named `Town Square`. |
-| `!botc unregister` or `!botc end` | Ends the game. Removes `BoTC-StoryTeller` and `BoTC-Player` from every member who has them, posts a "game ended" announcement in Town Square, and clears the game state so a new game can be registered. Only the Storyteller can use it. |
-| `!botc sitrep` | Reports whether a game is registered and, if so, the server, the admin and game channels, and the Storyteller. |
-| `!botc map` | Finds the village's voice channels by name and posts "Town Locations Mapped" in the admin channel. Requires `register` first. |
-| `!botc village create` | Makes everyone in Town Square voice (except the Storyteller and bots) the village's players, replacing any existing list. Gives them `BoTC-Player` and takes it from anyone dropped. Storyteller only, from the admin channel. |
-| `!botc village add @player...` | Adds the mentioned users to the village and gives them `BoTC-Player`. Storyteller only, from the admin channel. |
-| `!botc village remove @player...` | Removes the mentioned users from the village and takes `BoTC-Player` away. Storyteller only, from the admin channel. |
-| `!botc village list` | Lists the village's players. Storyteller only, from the admin channel. |
-| `!botc character assign @player [good\|evil] <Character>` | Stores a village player's character and team (Good if left out). Any lines after the first (Shift+Enter) are guidance, kept exactly as typed. Nothing is sent yet. Storyteller only, from the admin channel. |
-| `!botc character team @player good\|evil` | Moves a character to the other team and marks it unsent, so `send` tells the player. Storyteller only, from the admin channel. |
-| `!botc character kill @player...` / `revive @player...` | Marks players Dead or Alive. Nothing is posted publicly until `announce`. Reviving gives back the ghost vote. Storyteller only, from the admin channel. |
-| `!botc character ghostvote @player...` | Switches a dead player's ghost vote between used and available. Storyteller only, from the admin channel. |
-| `!botc character announce` | Posts the deaths and revivals since the last announcement in Town Square's text chat. Storyteller only, from the admin channel. |
-| `!botc character clear @player...` | Removes the stored characters. Storyteller only, from the admin channel. |
-| `!botc character list` or `!botc grimoire` | Shows the grimoire: each village player's character, team, Alive/Dead, ghost vote, whether it has been sent and any unannounced change, with totals. Storyteller only, from the admin channel. |
-| `!botc character send [@player...]` | DMs every unsent character to its player, or resends to the mentioned players. Reports failures and players with no character. Storyteller only, from the admin channel. |
-| `!botc whisper @player <text>` | DMs a village player a secret message straight away. The text can span several lines. Storyteller only, from the admin channel. |
+| `!botc ping` | Replies `pong`. Use it to check the bot is online. Works for anyone before a game is registered, and for the Storyteller from any channel once one is. |
+| `!botc register` or `!botc start` | Starts a game. Makes the current channel the admin channel and the Town Square voice channel the game channel, and posts a "new game" announcement in Town Square's text chat. Makes the sender the Storyteller and gives them the `BoTC-StoryTeller` role. Apart from `ping`, the only command that works before a game is registered. Refused if a game is already registered, or if there's no voice channel named `Town Square`. |
+| `!botc unregister` or `!botc end` | Ends the game. Removes `BoTC-StoryTeller` and `BoTC-Player` from every member who has them, posts a "game ended" announcement in Town Square, and clears the game state so a new game can be registered. |
+| `!botc sitrep` | Reports the game's server, the admin and game channels, and the Storyteller. |
+| `!botc map` | Finds the village's voice channels by name and posts "Town Locations Mapped" in the admin channel. |
+| `!botc village create` | Makes everyone in Town Square voice (except the Storyteller and bots) the village's players, replacing any existing list. Gives them `BoTC-Player` and takes it from anyone dropped. |
+| `!botc village add @player...` | Adds the mentioned users to the village and gives them `BoTC-Player`. |
+| `!botc village remove @player...` | Removes the mentioned users from the village and takes `BoTC-Player` away. |
+| `!botc village list` | Lists the village's players. |
+| `!botc character assign @player [good\|evil] <Character>` | Stores a village player's character and team (Good if left out). Any lines after the first (Shift+Enter) are guidance, kept exactly as typed. Nothing is sent yet. |
+| `!botc character team @player good\|evil` | Moves a character to the other team and marks it unsent, so `send` tells the player. |
+| `!botc character kill @player...` / `revive @player...` | Marks players Dead or Alive. Nothing is posted publicly until `announce`. Reviving gives back the ghost vote. |
+| `!botc character ghostvote @player...` | Switches a dead player's ghost vote between used and available. |
+| `!botc character announce` | Posts the deaths and revivals since the last announcement in Town Square's text chat. |
+| `!botc character clear @player...` | Removes the stored characters. |
+| `!botc character list` or `!botc grimoire` | Shows the grimoire: each village player's character, team, Alive/Dead, ghost vote, whether it has been sent and any unannounced change, with totals. |
+| `!botc character send [@player...]` | DMs every unsent character to its player, or resends to the mentioned players. Reports failures and players with no character. |
+| `!botc whisper @player <text>` | DMs a village player a secret message straight away. The text can span several lines. |
 
-Replies to a command always go to the channel the command was sent in.
+Replies to a command always go to the channel the command was sent in, which is the admin channel except for `register`, `ping` and refusals.
 
-Any other `!botc` command gets a "Huh? WTF is that command?!" reply.
+Any other `!botc` command from the Storyteller in the admin channel gets a "Huh? WTF is that command?!" reply.
 
 ### Game channels
 
 A game uses two channels:
 
-- **Admin channel:** the channel the Storyteller sends `!botc register` from. Admin output, such as the `!botc map` announcement, goes here. A private text channel only the Storyteller and moderators can see works well.
+- **Admin channel:** the channel the Storyteller sends `!botc register` from. All later commands must be sent here, and admin output, such as the `!botc map` announcement, goes here. A private text channel only the Storyteller and moderators can see works well.
 - **Game channel:** the `Town Square` voice channel. The bot posts game announcements (game started, game ended) in its text chat. It doesn't join the voice channel. It must exist before `!botc register`.
 
 For `!botc register` and `!botc map`, the voice channels must use these exact names:

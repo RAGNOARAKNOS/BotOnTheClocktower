@@ -6,14 +6,11 @@ The village is the list of players in the game (`Settings.Players`, user ID → 
 
 ## Activity: `village` dispatch
 
-Every `village` subcommand is Storyteller only, from the admin channel.
+Like every command, `village` only runs for the Storyteller in the admin channel; [`commandAllowed`](command-dispatch.md#activity-commandallowed) checks that before `village` is called.
 
 ```mermaid
 flowchart TD
-    start((" ")):::initial --> guard("requireStorytellerInAdmin")
-    guard --> d1{" "}
-    d1 -->|"[refused]"| refused(((" "))):::final
-    d1 -->|"[allowed]"| d2{" "}
+    start((" ")):::initial --> d2{" "}
     d2 -->|"[no subcommand, or not one below]"| usage("Reply with the village usage")
     d2 -->|"[create]"| create("villageCreate")
     d2 -->|"[add]"| add("villageAdd")
@@ -63,7 +60,7 @@ sequenceDiagram
     participant REST as Discord REST API
 
     ST->>Bot: !botc village create
-    Note over Bot: requireStorytellerInAdmin passes
+    Note over Bot: commandAllowed has passed
     Bot->>State: Guild(GuildId)
     State-->>Bot: Guild, with voice states
     Note over Bot,State: Under State.RLock: voice states in Town Square,<br/>except the Storyteller's
@@ -137,4 +134,4 @@ flowchart TD
 
 ---
 
-Last checked against code: 2026-09-26 (aba771e)
+Last checked against code: 2026-09-26 (f517dc2)

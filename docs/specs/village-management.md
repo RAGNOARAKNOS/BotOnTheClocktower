@@ -71,7 +71,8 @@ Subcommands:
 ## Implementation
 
 - `village`, `villageCreate`, `villageAdd`, `villageRemove`, `villageList` in [internal/bot/bot.go](../../internal/bot/bot.go).
-- Helpers: `requireStorytellerInAdmin` (the access check), `setPlayerRole` (looks the role up once, keeps going past failures), `replyWithRoleWarning`, `lookupMember` (voice state → state cache → Discord API), `memberDisplayName`, `sortedNames`.
+- Access is checked before any command runs, by `commandAllowed` (see [command-handling.md](command-handling.md)).
+- Helpers: `setPlayerRole` (looks the role up once, keeps going past failures), `replyWithRoleWarning`, `lookupMember` (voice state → state cache → Discord API), `memberDisplayName`, `sortedNames`.
 - Players are stored in `Settings.Players` (user ID → display name), so `playerNameToId` now works.
 - `create` gives `BoTC-Player` to everyone in the new list, not just newcomers, so running it again fixes any earlier role failure.
 - The old `mapPlayers` (console only) has been removed.

@@ -8,8 +8,8 @@ At the end of the DAY phase, move every player into their own "Cottage-XX" voice
 
 ## Behaviour
 
-- **Who can run it:** TBD (Storyteller only?)
-- **Where from:** TBD
+- **Who can run it:** the Storyteller only (every command is; see [command-handling.md](command-handling.md))
+- **Where from:** the admin channel only
 - **Needs a registered game:** yes
 - TBD
 

@@ -4,7 +4,7 @@
 
 The Storyteller gives each village player a secret character and team, sends them by DM, and tracks deaths and ghost votes. Covers [internal/bot/characters.go](../../internal/bot/characters.go). Spec: [characters.md](../specs/characters.md).
 
-Every `character` subcommand, `grimoire` and `whisper` is Storyteller only, from the admin channel ([`requireStorytellerInAdmin`](command-dispatch.md#activity-requirestorytellerinadmin)). A character (`Settings.Characters`, user ID → `*Character`) holds these fields:
+Like every command, `character`, `grimoire` and `whisper` only run for the Storyteller in the admin channel; [`commandAllowed`](command-dispatch.md#activity-commandallowed) checks that before they're called. A character (`Settings.Characters`, user ID → `*Character`) holds these fields:
 
 | Field | Meaning |
 | --- | --- |
@@ -240,9 +240,7 @@ sequenceDiagram
     actor P as Player
 
     ST->>Bot: !botc whisper @player text (can span several lines)
-    alt requireStorytellerInAdmin refuses
-        Bot->>REST: Reply explaining why the command will not execute
-    else parseWhisper fails: no mention, more than one, no text, or over 4096 characters
+    alt parseWhisper fails: no mention, more than one, no text, or over 4096 characters
         Bot->>REST: Reply "Could not read that..."
     else the player isn't in the village
         Bot->>REST: Reply "isn't in the village..."
@@ -261,4 +259,4 @@ sequenceDiagram
 
 ---
 
-Last checked against code: 2026-09-26 (aba771e)
+Last checked against code: 2026-09-26 (f517dc2)

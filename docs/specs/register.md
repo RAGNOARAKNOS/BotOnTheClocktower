@@ -8,9 +8,9 @@ Start a game on the server: set up the admin and game channels and record who th
 
 ## Behaviour
 
-- **Who can run it:** anyone. Whoever runs it becomes the Storyteller.
-- **Where from:** any text channel on the server. That channel becomes the **admin channel**.
-- **Needs a registered game:** no, and it's refused if one already exists.
+- **Who can run it:** anyone, while no game is registered. Whoever runs it becomes the Storyteller.
+- **Where from:** any text channel on the server. That channel becomes the **admin channel**, and from then on every command only works there (see [command-handling.md](command-handling.md)).
+- **Needs a registered game:** no, and it's refused if one already exists. It and `ping` are the only commands that run without one.
 
 Steps:
 
@@ -26,13 +26,16 @@ Steps:
 → Game channel: "A new game has begun. @Alice is the Storyteller."
 → Reply: "Game registered. @Alice is the Storyteller. This is the admin channel; #Town Square is the game channel."
 
-!botc start   (game already registered)
+!botc start   (game already registered; Storyteller, in the admin channel)
 → Reply: "A game is already registered, with @Alice as the Storyteller. This command will not execute"
+
+!botc start   (game already registered; anyone else, or another channel)
+→ Reply: "Commands only work for the Storyteller (@Alice), in the admin channel #st-admin. This command will not execute"
 ```
 
 ## Rules & edge cases
 
-- Refused for everyone while a game is registered, including the current Storyteller. End the game first with `!botc unregister`.
+- Refused for everyone while a game is registered, including the current Storyteller. End the game first with `!botc unregister`. Who sent it decides which refusal they see.
 - If the `BoTC-StoryTeller` role is missing or above the bot's role, registration still succeeds and the reply includes a warning. The game can run without the role.
 - The bot does not join voice.
 - One game at a time, across all servers the bot is in.
@@ -58,6 +61,7 @@ Steps:
 - 2026-09-25: A failure to give the role is a warning, not a failure, because the game works without it.
 - 2026-09-25: The bot doesn't join voice; it had no reason to.
 - 2026-09-25: `start` added as an alias.
+- 2026-09-26: `register` is the only command that runs with no game registered; every other command is ignored until then, and afterwards only works for the Storyteller in the admin channel.
 
 ## Implementation
 

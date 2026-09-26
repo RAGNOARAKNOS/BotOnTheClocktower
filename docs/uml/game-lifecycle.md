@@ -4,9 +4,11 @@
 
 Starting and ending a game, and the commands that report on it or prepare it. Covers `register`, `unregister`, `removeGameRoles`, `mapRooms`, `sitrep` and their helpers in [internal/bot/bot.go](../../internal/bot/bot.go). The bot runs one game at a time.
 
+Every command here has already passed [`commandAllowed`](command-dispatch.md#activity-commandallowed): `register` runs from anywhere when no game is registered, and everything else, including `register` once a game exists, only runs for the Storyteller in the admin channel.
+
 ## Activity: `register`
 
-Whoever sends `!botc register` (or `start`) becomes the Storyteller, and the channel they send it from becomes the admin channel. If the Storyteller role can't be given, registration still succeeds and the reply includes a warning.
+Whoever sends `!botc register` (or `start`) becomes the Storyteller, and the channel they send it from becomes the admin channel. If the Storyteller role can't be given, registration still succeeds and the reply includes a warning. The "already registered" refusal is only reached by the Storyteller in the admin channel; `commandAllowed` refuses anyone else.
 
 ```mermaid
 flowchart TD
@@ -65,15 +67,11 @@ sequenceDiagram
 
 ## Activity: `unregister`
 
-Only the Storyteller can end the game, from the server it was registered in. `removeGameRoles` takes both game roles from **every** member who has them, including roles given out by hand, and carries on past individual failures.
+`commandAllowed` has already checked that a game is registered and that the Storyteller sent this from the admin channel. `removeGameRoles` takes both game roles from **every** member who has them, including roles given out by hand, and carries on past individual failures.
 
 ```mermaid
 flowchart TD
-    start((" ")):::initial --> d1{" "}
-    d1 -->|"[no game registered]"| r1("Reply: No game registered")
-    d1 -->|"[registered]"| d2{" "}
-    d2 -->|"[not the Storyteller, or another server]"| r2("Reply: Only the Storyteller can end the game")
-    d2 -->|"[Storyteller]"| look("findRoleID for BoTC-StoryTeller and BoTC-Player<br/>(record an error for any role that's missing)")
+    start((" ")):::initial --> look("findRoleID for BoTC-StoryTeller and BoTC-Player<br/>(record an error for any role that's missing)")
     look --> d3{" "}
     d3 -->|"[neither role found]"| announce
     d3 -->|"[at least one found]"| page("GuildMembers: fetch the next page<br/>of up to 1000 members")
@@ -86,8 +84,6 @@ flowchart TD
     recErr --> announce
     announce --> reset("Reset settings: IDs to UNSET, GameRegistered = false,<br/>Players, Characters and Rooms = nil")
     reset --> reply("Reply: Game ended, N roles removed<br/>(plus a warning listing any errors)")
-    r1 --> refused(((" "))):::final
-    r2 --> refused
     reply --> ended(((" "))):::final
 
     classDef initial fill:#000,stroke:#666
@@ -104,32 +100,28 @@ sequenceDiagram
     participant REST as Discord REST API
     actor Town as Town Square chat
 
-    ST->>Bot: !botc unregister
-    alt no game, or not the Storyteller from the registered server
-        Bot->>REST: Reply explaining why the command will not execute
-    else Storyteller
-        Bot->>REST: GuildRoles(guild), in findRoleID, once per game role
-        REST-->>Bot: Roles
-        opt at least one game role exists
-            loop pages of up to 1000 members, until a short page or an error
-                Bot->>REST: GuildMembers(guild, after, 1000)
-                REST-->>Bot: Members
-                loop each game role held by each member
-                    Bot->>REST: GuildMemberRoleRemove(guild, member, role)
-                end
+    ST->>Bot: !botc unregister (from the admin channel)
+    Bot->>REST: GuildRoles(guild), in findRoleID, once per game role
+    REST-->>Bot: Roles
+    opt at least one game role exists
+        loop pages of up to 1000 members, until a short page or an error
+            Bot->>REST: GuildMembers(guild, after, 1000)
+            REST-->>Bot: Members
+            loop each game role held by each member
+                Bot->>REST: GuildMemberRoleRemove(guild, member, role)
             end
         end
-        Bot->>REST: ChannelMessageSend(Town Square, "The game has ended...")
-        REST-->>Town: End announcement
-        Note over Bot: Reset all settings to UNSET / false / nil
-        Bot->>REST: Reply "Game ended. Removed N game role(s)." (plus warnings)
     end
-    REST-->>ST: Reply
+    Bot->>REST: ChannelMessageSend(Town Square, "The game has ended...")
+    REST-->>Town: End announcement
+    Note over Bot: Reset all settings to UNSET / false / nil
+    Bot->>REST: Reply "Game ended. Removed N game role(s)." (plus warnings)
+    REST-->>ST: Reply in the admin channel
 ```
 
 ## Sequence: `map`
 
-Anyone can run `map` once a game is registered. It finds the village's voice channels by name (see `villageCodeLookup`) and stores their IDs in `Settings.Rooms`. It doesn't move anyone.
+`map` finds the village's voice channels by name (see `villageCodeLookup`) and stores their IDs in `Settings.Rooms`. It doesn't move anyone.
 
 ```mermaid
 sequenceDiagram
@@ -138,40 +130,34 @@ sequenceDiagram
     participant Bot as Bot (extractCommand, mapRooms)
     participant REST as Discord REST API
 
-    ST->>Bot: !botc map
-    alt no game registered
-        Bot->>REST: Reply "No game registered, this command will not execute"
-    else registered
-        Bot->>REST: GuildChannels(guild), in getMapGuildChannels
-        alt request failed
-            REST-->>Bot: Error
-            Bot->>REST: Reply "Could not map the town's channels..."
-        else channels returned
-            REST-->>Bot: Channels
-            Note over Bot: Settings.Rooms = code → channel ID<br/>for each name in villageCodeLookup (TS, CA, CF, PS, TW, RS, SC)
-            Bot->>REST: ChannelMessageSendTTS(admin channel, "Town Locations Mapped")
-        end
+    ST->>Bot: !botc map (from the admin channel)
+    Bot->>REST: GuildChannels(guild), in getMapGuildChannels
+    alt request failed
+        REST-->>Bot: Error
+        Bot->>REST: Reply "Could not map the town's channels..."
+    else channels returned
+        REST-->>Bot: Channels
+        Note over Bot: Settings.Rooms = code → channel ID<br/>for each name in villageCodeLookup (TS, CA, CF, PS, TW, RS, SC)
+        Bot->>REST: ChannelMessageSendTTS(admin channel, "Town Locations Mapped")
     end
 ```
 
 ## Sequence: `sitrep`
 
+`sitrep` still has a "Game is not initialised" branch, but `commandAllowed` ignores every command except `register` and `ping` while no game is registered, so that branch is never reached.
+
 ```mermaid
 sequenceDiagram
     autonumber
-    actor User
+    actor ST as Storyteller
     participant Bot as Bot.sitrep
     participant REST as Discord REST API
 
-    User->>Bot: !botc sitrep
-    alt game registered
-        Bot->>REST: ChannelMessageSend(source channel, "SITREP-Game is initialised at ...")
-    else no game
-        Bot->>REST: ChannelMessageSend(source channel, "SITREP-Game is not initialised")
-    end
-    REST-->>User: Status message
+    ST->>Bot: !botc sitrep (from the admin channel)
+    Bot->>REST: ChannelMessageSend(admin channel, "SITREP-Game is initialised at ...")
+    REST-->>ST: Status message
 ```
 
 ---
 
-Last checked against code: 2026-09-26 (aba771e)
+Last checked against code: 2026-09-26 (f517dc2)

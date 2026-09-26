@@ -12,14 +12,18 @@ Rules shared by every command: how messages are recognised as commands, and how 
 - Messages from bots, including this one, are ignored.
 - A message that is just `!botc` with nothing after it is ignored.
 - Commands run one at a time, never concurrently.
-- Unknown command → `Huh? WTF is that command?!`
+- **Access, checked before every command:**
+  - No game registered: only `register` / `start` and `ping` run, from any channel; `register`'s channel becomes the admin channel. Every other command, including unknown ones, is ignored with no reply (logged to the console).
+  - Game registered: every command must come from the Storyteller, in the admin channel of the registered server. The exception is `ping`, which the Storyteller can send from any channel. Anything else is refused: `Commands only work for the Storyteller (@Alice), in the admin channel #st-admin. This command will not execute`
+- Unknown command (from the Storyteller, in the admin channel) → `Huh? WTF is that command?!`
 - If a command hits an unexpected bug (a panic), the bot stays up and replies `Something went wrong running that command. Check the bot's logs.`
-- Replies go to the channel the command was sent in.
+- Replies go to the channel the command was sent in. Because of the access rule, that's the admin channel, except for `register`, `ping` and refusals.
 
 ## Rules & edge cases
 
 - `pmove` and `cmove` are recognised but currently do nothing and send no reply.
-- Commands work in any channel the bot can read, including DMs, though game commands need a server.
+- A refusal is sent in the channel the command came from, which can be a public channel or a DM, so it names the Storyteller and the admin channel.
+- `register` while a game is registered is caught by the access rule unless it comes from the Storyteller in the admin channel, in which case `register` itself refuses it.
 
 ## Out of scope
 
@@ -28,7 +32,6 @@ Rules shared by every command: how messages are recognised as commands, and how 
 ## Open questions
 
 - Should unknown commands reply with a help list instead?
-- Should game-management commands only work in the admin channel?
 - Should `pmove`/`cmove` reply "not implemented yet", or be removed?
 
 ## Decisions
@@ -36,8 +39,10 @@ Rules shared by every command: how messages are recognised as commands, and how 
 - 2026-09-25: Prefix must be exactly `!botc` (was: any word containing `!botc`). Command names are case-insensitive.
 - 2026-09-25: Commands are serialised with a mutex, because discordgo runs handlers concurrently and two simultaneous `register`s could both succeed.
 - 2026-09-25: Handlers must not `panic`; a `recover` in `newMessage` is the safety net so a bug can't crash the bot and lose the in-memory game.
+- 2026-09-26: Commands only work from the admin channel, and only for the Storyteller. With no game registered only `register` / `start` runs (from any channel, which becomes the admin channel) and everything else is ignored silently. Once registered, commands from anyone else or anywhere else get a refusal. This replaces the per-command checks (`requireStorytellerInAdmin`, and `unregister`'s own), so `ping`, `sitrep` and `map` are no longer open to everyone.
+- 2026-09-26: Exception for `ping`: anyone can ping while no game is registered, and the Storyteller can ping from any channel once one is.
 
 ## Implementation
 
-- `newMessage` and `extractCommand` in [internal/bot/bot.go](../../internal/bot/bot.go).
+- `newMessage`, `extractCommand` and `commandAllowed` (the access check) in [internal/bot/bot.go](../../internal/bot/bot.go).
 - Every argument is printed to the console (debug output).

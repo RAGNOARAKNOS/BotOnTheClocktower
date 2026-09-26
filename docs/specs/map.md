@@ -8,9 +8,9 @@ Find the village's voice channels so later commands can move players between the
 
 ## Behaviour
 
-- **Who can run it:** anyone
-- **Where from:** any channel
-- **Needs a registered game:** yes
+- **Who can run it:** the Storyteller only
+- **Where from:** the admin channel only
+- **Needs a registered game:** yes; without one it's ignored (see [command-handling.md](command-handling.md))
 
 Steps:
 
@@ -53,6 +53,7 @@ Steps:
 ## Decisions
 
 - 2026-09-26: `map` no longer lists or touches players. The player list is built by `!botc village create` ([village-management.md](village-management.md)), and `map` used to wipe it.
+- 2026-09-26: Storyteller only, from the admin channel, like every command (was: anyone, anywhere). With no game registered it's now ignored rather than replying "No game registered".
 
 ## Implementation
 

@@ -8,9 +8,9 @@ One or two sentences: what problem this solves, and for whom (Storyteller, playe
 
 ## Behaviour
 
-- **Who can run it:** anyone / Storyteller only / moderators
-- **Where from:** any channel / admin channel only
-- **Needs a registered game:** yes / no
+- **Who can run it:** the Storyteller only (every command except `register` and `ping`; see [command-handling.md](command-handling.md))
+- **Where from:** the admin channel only
+- **Needs a registered game:** yes
 - What happens, step by step.
 
 Examples:

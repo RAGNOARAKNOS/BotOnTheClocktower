@@ -8,8 +8,8 @@ Move all players into Town Square in one command: at the end of the NIGHT phase 
 
 ## Behaviour
 
-- **Who can run it:** TBD (Storyteller only?)
-- **Where from:** TBD (admin channel only?)
+- **Who can run it:** the Storyteller only (every command is; see [command-handling.md](command-handling.md))
+- **Where from:** the admin channel only
 - **Needs a registered game:** yes
 - TBD
 

@@ -8,15 +8,12 @@ Show whether a game is running, and where.
 
 ## Behaviour
 
-- **Who can run it:** anyone
-- **Where from:** any channel
-- **Needs a registered game:** no
+- **Who can run it:** the Storyteller only
+- **Where from:** the admin channel only
+- **Needs a registered game:** yes; without one it's ignored (see [command-handling.md](command-handling.md))
 
 ```text
-!botc sitrep   (no game)
-→ "SITREP-Game is not initialised"
-
-!botc sitrep   (game registered)
+!botc sitrep
 → "SITREP-Game is initialised at guildid# 1234… admin channel #st-admin game channel #Town Square storyteller @Alice"
 ```
 
@@ -26,7 +23,13 @@ Channels and the Storyteller appear as clickable mentions. The server is shown a
 
 - Should it also show mapped rooms and players, once player tracking exists?
 - Should the wording be tidied (e.g. "Game in progress" rather than "initialised")?
+- With no game registered, `sitrep` is now ignored, so there's no way to ask the bot whether a game exists. Should `sitrep` be allowed before registration?
+
+## Decisions
+
+- 2026-09-26: Storyteller only, from the admin channel, like every command (was: anyone, anywhere, with or without a game).
 
 ## Implementation
 
 - `sitrep` in [internal/bot/bot.go](../../internal/bot/bot.go).
+- Its "Game is not initialised" branch can no longer be reached, because the access check ignores commands when no game is registered.

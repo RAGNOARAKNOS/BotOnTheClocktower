@@ -158,12 +158,8 @@ func parseWhisper(content string) (userID, text string, err error) {
 	return userID, text, nil
 }
 
-// character dispatches the character subcommands. All of them are Storyteller-only, from the admin channel.
+// character dispatches the character subcommands.
 func (b *Bot) character(message *discordgo.MessageCreate, rawText []string) {
-	if !b.requireStorytellerInAdmin(message) {
-		return
-	}
-
 	if len(rawText) < 3 {
 		b.discord.ChannelMessageSendReply(message.ChannelID, characterUsage, message.Reference())
 		return
@@ -610,10 +606,6 @@ func (b *Bot) characterSend(message *discordgo.MessageCreate) {
 
 // whisper DMs a village player a secret message from the Storyteller straight away.
 func (b *Bot) whisper(message *discordgo.MessageCreate) {
-	if !b.requireStorytellerInAdmin(message) {
-		return
-	}
-
 	userID, text, err := parseWhisper(message.Content)
 	if err != nil {
 		b.discord.ChannelMessageSendReply(message.ChannelID, fmt.Sprintf("Could not read that (%v). %s", err, whisperUsage), message.Reference())

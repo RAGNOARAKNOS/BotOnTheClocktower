@@ -113,7 +113,12 @@ func (b *Bot) extractCommand(message *discordgo.MessageCreate, rawText []string)
 		fmt.Printf("MessageParam# %d MessageParamContent %q \n", i, rawText[i])
 	}
 
-	switch strings.ToLower(rawText[1]) {
+	command := strings.ToLower(rawText[1])
+	if !b.commandAllowed(message, command) {
+		return
+	}
+
+	switch command {
 	case "ping":
 		b.discord.ChannelMessageSend(message.ChannelID, "pong")
 	case "register", "start":
@@ -123,23 +128,16 @@ func (b *Bot) extractCommand(message *discordgo.MessageCreate, rawText []string)
 	case "sitrep":
 		b.sitrep(message)
 	case "map":
-		if b.settings.GameRegistered {
-			if err := b.mapRooms(); err != nil {
-				fmt.Printf("Could not map rooms: %v \n", err)
-				b.discord.ChannelMessageSendReply(message.ChannelID, fmt.Sprintf("Could not map the town's channels (%v)", err), message.Reference())
-			}
-		} else {
-			fmt.Println("No game registered")
-			b.discord.ChannelMessageSendReply(message.ChannelID, "No game registered, this command will not execute", message.Reference())
+		if err := b.mapRooms(); err != nil {
+			fmt.Printf("Could not map rooms: %v \n", err)
+			b.discord.ChannelMessageSendReply(message.ChannelID, fmt.Sprintf("Could not map the town's channels (%v)", err), message.Reference())
 		}
 	case "village":
 		b.village(message, rawText)
 	case "character":
 		b.character(message, rawText)
 	case "grimoire":
-		if b.requireStorytellerInAdmin(message) {
-			b.characterList(message)
-		}
+		b.characterList(message)
 	case "whisper":
 		b.whisper(message)
 	case "pmove":
@@ -190,12 +188,8 @@ func (b *Bot) getMapGuildChannels(guildId string) (map[string]string, error) {
 
 const villageUsage = "Usage: `!botc village create`, `!botc village add @player...`, `!botc village remove @player...`, `!botc village list`"
 
-// village dispatches the village subcommands. All of them are Storyteller-only, from the admin channel.
+// village dispatches the village subcommands.
 func (b *Bot) village(message *discordgo.MessageCreate, rawText []string) {
-	if !b.requireStorytellerInAdmin(message) {
-		return
-	}
-
 	if len(rawText) < 3 {
 		b.discord.ChannelMessageSendReply(message.ChannelID, villageUsage, message.Reference())
 		return
@@ -364,16 +358,27 @@ func (b *Bot) villageList(message *discordgo.MessageCreate) {
 	b.discord.ChannelMessageSendReply(message.ChannelID, sb.String(), message.Reference())
 }
 
-// requireStorytellerInAdmin replies and returns false unless a game is registered and
-// the message is from the Storyteller, in the admin channel of the registered server.
-func (b *Bot) requireStorytellerInAdmin(message *discordgo.MessageCreate) bool {
+// commandAllowed reports whether a command may run, and is checked before every command.
+// With no game registered, only register/start and ping run, from any channel (register's
+// channel becomes the admin channel), and every other command is ignored without a reply.
+// Once a game is registered, every command must come from the Storyteller, in the
+// admin channel of the registered server, except ping, which the Storyteller can send
+// from anywhere; anything else gets a refusal.
+func (b *Bot) commandAllowed(message *discordgo.MessageCreate, command string) bool {
 	if !b.settings.GameRegistered {
-		b.discord.ChannelMessageSendReply(message.ChannelID, "No game registered, this command will not execute", message.Reference())
+		if command == "register" || command == "start" || command == "ping" {
+			return true
+		}
+		fmt.Printf("Ignoring %q: no game registered \n", command)
 		return false
 	}
 
+	if command == "ping" && message.Author.ID == b.settings.StoryTellerId {
+		return true
+	}
+
 	if message.GuildID != b.settings.GuildId || message.Author.ID != b.settings.StoryTellerId || message.ChannelID != b.settings.AdminChannelId {
-		reply := fmt.Sprintf("Only the Storyteller (<@%s>) can run this, from the admin channel <#%s>. This command will not execute", b.settings.StoryTellerId, b.settings.AdminChannelId)
+		reply := fmt.Sprintf("Commands only work for the Storyteller (<@%s>), in the admin channel <#%s>. This command will not execute", b.settings.StoryTellerId, b.settings.AdminChannelId)
 		b.discord.ChannelMessageSendReply(message.ChannelID, reply, message.Reference())
 		return false
 	}
@@ -610,17 +615,6 @@ func (b *Bot) register(message *discordgo.MessageCreate) {
 // unregister ends the current game: it removes the game roles from everyone
 // and resets the game state so a new game can be registered.
 func (b *Bot) unregister(message *discordgo.MessageCreate) {
-	if !b.settings.GameRegistered {
-		b.discord.ChannelMessageSendReply(message.ChannelID, "No game registered, this command will not execute", message.Reference())
-		return
-	}
-
-	if message.GuildID != b.settings.GuildId || message.Author.ID != b.settings.StoryTellerId {
-		reply := fmt.Sprintf("Only the Storyteller (<@%s>) can end the game, from the server it was registered in. This command will not execute", b.settings.StoryTellerId)
-		b.discord.ChannelMessageSendReply(message.ChannelID, reply, message.Reference())
-		return
-	}
-
 	guildID := b.settings.GuildId
 
 	removed, roleErr := b.removeGameRoles(guildID)
