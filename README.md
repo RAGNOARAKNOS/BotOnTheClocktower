@@ -46,7 +46,7 @@ In the developer portal, open **OAuth2 → URL Generator**, tick the `bot` scope
 | Send TTS Messages | Announce "Town Locations Mapped" in the admin channel after `!botc map` |
 | Read Message History | Reply directly to the command message |
 | Connect | Needed alongside Move Members: Discord only lets the bot move someone into a voice channel it could connect to itself. The bot never joins voice |
-| Manage Roles | Give the `BoTC-StoryTeller` role on `!botc register`, and remove the game roles on `!botc unregister` |
+| Manage Roles | Give the `BoTC-StoryTeller` role on `!botc register`, give and take `BoTC-Player` with the `!botc village` commands, and remove the game roles on `!botc unregister` |
 | Move Members | Needed for the planned commands that move players between voice channels |
 
 When the bot joins, Discord automatically creates a role with the bot's name that holds these permissions. Don't delete it.
@@ -58,7 +58,7 @@ The bot uses two roles that must already exist on the server. It doesn't create 
 | Role | Purpose |
 | --- | --- |
 | `BoTC-StoryTeller` | Given to whoever runs `!botc register`, removed on `!botc unregister` |
-| `BoTC-Player` | Marks players in the game. Give it out by hand for now; it's removed from everyone on `!botc unregister` |
+| `BoTC-Player` | Marks players in the village. Given and taken by `!botc village create`/`add`/`remove`; removed from everyone on `!botc unregister` |
 
 The bot doesn't need either role to have any permissions. What you give them is up to you. Useful options for `BoTC-StoryTeller` are Move Members, Mute Members, Deafen Members and Priority Speaker.
 
@@ -76,7 +76,7 @@ Other member roles
 ```
 
 - If `BoTC-StoryTeller` is above the bot's role, registration still succeeds, but the bot can't give out the role. It replies with a warning instead.
-- Likewise, if either game role is above the bot's role, `!botc unregister` still ends the game, but can't remove that role and replies with a warning.
+- Likewise, if `BoTC-Player` is above the bot's role, the `!botc village` commands still update the player list but reply with a warning, and `!botc unregister` still ends the game but can't remove that role and replies with a warning.
 - Manage Roles lets the bot give out **any** role below its own. Keep moderator and admin roles above the bot's role so it can never hand them out.
 
 #### 4. Check channel overrides
@@ -173,7 +173,11 @@ Every command starts with `!botc`, followed by the command name, e.g. `!botc pin
 | `!botc register` or `!botc start` | Starts a game. Makes the current channel the admin channel and the Town Square voice channel the game channel, and posts a "new game" announcement in Town Square's text chat. Makes the sender the Storyteller and gives them the `BoTC-StoryTeller` role. Run this before any other game command. Refused if a game is already registered, or if there's no voice channel named `Town Square`. |
 | `!botc unregister` or `!botc end` | Ends the game. Removes `BoTC-StoryTeller` and `BoTC-Player` from every member who has them, posts a "game ended" announcement in Town Square, and clears the game state so a new game can be registered. Only the Storyteller can use it. |
 | `!botc sitrep` | Reports whether a game is registered and, if so, the server, the admin and game channels, and the Storyteller. |
-| `!botc map` | Finds the village's voice channels by name and posts "Town Locations Mapped" in the admin channel. It then lists the players in Town Square, but only to the bot's console for now. Requires `register` first. |
+| `!botc map` | Finds the village's voice channels by name and posts "Town Locations Mapped" in the admin channel. Requires `register` first. |
+| `!botc village create` | Makes everyone in Town Square voice (except the Storyteller and bots) the village's players, replacing any existing list. Gives them `BoTC-Player` and takes it from anyone dropped. Storyteller only, from the admin channel. |
+| `!botc village add @player...` | Adds the mentioned users to the village and gives them `BoTC-Player`. Storyteller only, from the admin channel. |
+| `!botc village remove @player...` | Removes the mentioned users from the village and takes `BoTC-Player` away. Storyteller only, from the admin channel. |
+| `!botc village list` | Lists the village's players. Storyteller only, from the admin channel. |
 
 Replies to a command always go to the channel the command was sent in.
 
@@ -198,7 +202,7 @@ For `!botc register` and `!botc map`, the voice channels must use these exact na
 | `RS` | Riverside |
 | `SC` | Storyteller's Corner |
 
-Game state is kept in memory only. If the bot restarts, run `!botc register` and `!botc map` again. A restart doesn't remove anyone's game roles; run `!botc unregister` first if you can.
+Game state, including the village's player list, is kept in memory only. If the bot restarts, run `!botc register`, `!botc map` and `!botc village create` again. A restart doesn't remove anyone's game roles; run `!botc unregister` first if you can.
 
 ## Features
 
@@ -220,7 +224,7 @@ During the NIGHT phase, all players are placed into individually allocated "Cott
 
 Also, at the end of the DAY phase when the town gathers for nominations - *some* players have the tendency to dilly dally in the side channels, this will forceably move the players into "Town Square".
 
-Done so far: game registration with the sender as Storyteller (`!botc register`), mapping the village's voice channels (`!botc map`), and an internal helper for moving a player to a channel. Still to do: the `gather` command itself, recording the player list, restricting commands to the Storyteller, and "Cottage-XX" channels. The `pmove` and `cmove` commands are placeholders that currently do nothing.
+Done so far: game registration with the sender as Storyteller (`!botc register`), mapping the village's voice channels (`!botc map`), and an internal helper for moving a player to a channel. Also done: the player list (`!botc village`). Still to do: the `gather` command itself and "Cottage-XX" channels. The `pmove` and `cmove` commands are placeholders that currently do nothing.
 
 ### Sending Players to Sleep
 
@@ -234,11 +238,20 @@ Spec: [bedtime.md](docs/specs/bedtime.md)
 
 At the end of the DAY phase, all players need to be placed into their respective "Cottage-XX" voice channel.
 
-### Village Creation & Destruction
+### Village Creation & Management
 
-Status: PLANNED
+Status: DONE
 
 Spec: [village-management.md](docs/specs/village-management.md)
+
+```shell
+!botc village create
+!botc village add @player
+!botc village remove @player
+!botc village list
+```
+
+The village is the list of players in the game. The Storyteller builds it from everyone in Town Square voice, then adds or removes players by hand. Players in the village have the `BoTC-Player` role. See [Commands](#commands).
 
 ### OBS Integration
 

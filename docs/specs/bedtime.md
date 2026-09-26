@@ -35,12 +35,11 @@ At the end of the DAY phase, move every player into their own "Cottage-XX" voice
 - How are cottage channels named and numbered (`Cottage-01`? `Cottage 1`?), and does the bot create them or expect them to exist? See [village-management.md](village-management.md).
 - Does each player keep the same cottage every night, or are they assigned fresh each time? If fixed, how is the assignment decided?
 - What if there are more players than cottages?
-- Who counts as a player? This should match [gather.md](gather.md).
 - Is the Storyteller moved (e.g. to Storyteller's Corner)?
 
 ## Decisions
 
-- (none yet)
+- 2026-09-26: The players are the village list from `!botc village` ([village-management.md](village-management.md)), the same as [gather.md](gather.md).
 
 ## Implementation
 

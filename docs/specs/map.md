@@ -4,7 +4,7 @@ Status: DONE (with known gaps)
 
 ## Goal
 
-Find the village's voice channels so later commands can move players between them, and work out who is playing.
+Find the village's voice channels so later commands can move players between them. (Working out who is playing is now `!botc village create`; see [village-management.md](village-management.md).)
 
 ## Behaviour
 
@@ -27,7 +27,6 @@ Steps:
    | `SC` | Storyteller's Corner |
 
 2. Post "Town Locations Mapped" as a text-to-speech message in the admin channel.
-3. List everyone in Town Square voice except the Storyteller, **to the bot's console only**.
 
 ```text
 !botc map
@@ -42,24 +41,21 @@ Steps:
 ## Done when
 
 - [x] Records IDs for the named village channels
-- [ ] Records the players (currently printed to the console, then thrown away)
 - [ ] Reports which locations were found or missing
 
 ## Open questions
 
-- Should the player list be stored, and if so, who counts as a player: people in Town Square, or people with `BoTC-Player`?
-- Should the result be posted to the admin channel, e.g. found/missing locations and player names?
+- Should the result be posted to the admin channel, e.g. found/missing locations?
 - Keep the TTS announcement, or use a plain message?
 - Should this run automatically as part of `register`?
 - Where do the "Cottage-XX" channels fit, since `gather` and `bedtime` depend on them?
 
 ## Decisions
 
-- (none yet)
+- 2026-09-26: `map` no longer lists or touches players. The player list is built by `!botc village create` ([village-management.md](village-management.md)), and `map` used to wipe it.
 
 ## Implementation
 
-- `mapRooms`, `getMapGuildChannels`, `mapPlayers`, `villageCodeLookup` in [internal/bot/bot.go](../../internal/bot/bot.go).
+- `mapRooms`, `getMapGuildChannels`, `villageCodeLookup` in [internal/bot/bot.go](../../internal/bot/bot.go).
 - Known gaps:
   - Matching ignores channel type. If a category or text channel shares a name, or two channels share a name, the recorded ID is unpredictable. `Rooms["TS"]` could differ from the game channel `register` chose.
-  - `Players` is reset to empty but never filled, so `playerNameToId` always returns "".

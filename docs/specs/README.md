@@ -23,6 +23,7 @@ Status values: **IDEA** (not yet shaped) â†’ **PLANNED** (agreed, not started) â
 | [unregister.md](unregister.md) | `!botc unregister` / `end` | DONE |
 | [sitrep.md](sitrep.md) | `!botc sitrep` | DONE |
 | [map.md](map.md) | `!botc map` | DONE (with known gaps) |
+| [village-management.md](village-management.md) | `!botc village ...` | DONE (untested on Discord) |
 
 ### Planned and ideas
 
@@ -30,7 +31,6 @@ Status values: **IDEA** (not yet shaped) â†’ **PLANNED** (agreed, not started) â
 | --- | --- | --- |
 | [gather.md](gather.md) | `!botc gather` | IN PROGRESS |
 | [bedtime.md](bedtime.md) | `!botc bedtime` | PLANNED |
-| [village-management.md](village-management.md) | TBD | PLANNED |
 | [obs-integration.md](obs-integration.md) | `!botc obs ...` | PLANNED (detailed in [roadmap.md](../../roadmap.md)) |
 | [vote-tracking.md](vote-tracking.md) | TBD | IDEA |
 | [game-visualisation.md](game-visualisation.md) | TBD | IDEA |
