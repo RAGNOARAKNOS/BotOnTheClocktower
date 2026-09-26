@@ -62,7 +62,7 @@ Which diagram covers which code. When you change one of these functions, update 
 | `newMessage`, `extractCommand`, `commands` | [command-dispatch.md](command-dispatch.md) |
 | `allowed` | [command-dispatch.md](command-dispatch.md) |
 | `mapCommand` | [game-lifecycle.md](game-lifecycle.md) |
-| `register`, `newGame`, `findVoiceChannelID`, `assignStorytellerRole`, `findRoleID` | [game-lifecycle.md](game-lifecycle.md) |
+| `register`, `newGame`, `findVoiceChannelID`, `assignStorytellerRole`, `findRoleID`, `channelAccessWarning` | [game-lifecycle.md](game-lifecycle.md) |
 | `unregister`, `removeGameRoles` | [game-lifecycle.md](game-lifecycle.md) |
 | `mapRooms`, `getMapGuildChannels`, `villageCodeLookup` | [game-lifecycle.md](game-lifecycle.md) |
 | `sitrep` | [game-lifecycle.md](game-lifecycle.md) |
@@ -79,7 +79,7 @@ Which diagram covers which code. When you change one of these functions, update 
 
 - `villageList`, `characterClear`: a single loop and a reply.
 - `sortedNames`, `sortedPlayerIDs`, `playerName`, `ghostVoteState`: formatting helpers.
-- `reply`, `send`: send a message and log any failure. `ping`: sends `pong`.
+- `reply`, `send`: send a message and log any failure. `missingPermissions`, `isVillageRoom`, `botUserID`: small helpers for `channelAccessWarning`. `ping`: sends `pong`.
 
 ## Keeping the diagrams up to date
 

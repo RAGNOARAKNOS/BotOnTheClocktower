@@ -46,7 +46,7 @@ Configuration: `BOTAPIKEY` (Discord bot token), read from the environment or fro
   - `bot.go` — the `Bot` struct, `Run` (session setup) and `newMessage` (lock, recover).
   - `commands.go` — the `commands` table (name and alias → handler plus access flags), `extractCommand` (dispatch), `allowed` (access), `ping`, and the `reply`/`send` helpers.
   - `game.go` — `Game` (the registered game's state), `register`, `unregister`, `sitrep`, `map`.
-  - `village.go` — the `village` commands. `roles.go` — Discord role lookups and changes. `discord.go` — member and channel lookups.
+  - `village.go` — the `village` commands. `roles.go` — Discord role lookups and changes. `discord.go` — member and channel lookups. `permissions.go` — what the bot needs in each game channel, checked by `register`.
   - `characters.go` — the `character` commands and `Character`. `grimoire.go` — `character list`/`grimoire` output. `whisper.go` — `whisper` and the DM helpers.
   - `parse.go` — parsing raw message content (mentions, assignments, whispers). Tests sit next to the code: `parse_test.go`, `grimoire_test.go`, `characters_test.go`.
 - `docs/uml/` — Mermaid UML activity and sequence diagrams of how the code works at runtime, with a source map from Go functions to diagrams.

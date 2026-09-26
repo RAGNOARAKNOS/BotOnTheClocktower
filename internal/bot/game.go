@@ -155,6 +155,11 @@ func (b *Bot) register(message *discordgo.MessageCreate, _ []string) {
 		log.Printf("Could not assign the %s role: %v", storytellerRoleName, err)
 		reply += fmt.Sprintf(" Warning: could not assign the %q role (%v). Check the role exists and sits below the bot's role.", storytellerRoleName, err)
 	}
+	// Missing channel permissions make the bot silently ignore commands, so warn now.
+	if warning := b.channelAccessWarning(b.game.GuildID, b.game.AdminChannelID, b.game.GameChannelID); warning != "" {
+		log.Printf("The bot is missing channel permissions: %s", warning)
+		reply += warning
+	}
 	b.reply(message, reply)
 }
 

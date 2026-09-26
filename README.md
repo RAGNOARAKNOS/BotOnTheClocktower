@@ -49,7 +49,7 @@ In the developer portal, open **OAuth2 → URL Generator**, tick the `bot` scope
 | Manage Roles | Give the `BoTC-StoryTeller` role on `!botc register`, give and take `BoTC-Player` with the `!botc village` commands, and remove the game roles on `!botc unregister` |
 | Move Members | Needed for the planned commands that move players between voice channels |
 
-When the bot joins, Discord automatically creates a role with the bot's name that holds these permissions. Don't delete it.
+When the bot joins, Discord automatically creates a role with the bot's name that holds these permissions. Don't delete it. These are server-wide permissions: if your game channels are private, the bot also needs access to them (step 4).
 
 #### 2. Check the game roles exist
 
@@ -79,9 +79,30 @@ Other member roles
 - Likewise, if `BoTC-Player` is above the bot's role, the `!botc village` commands still update the player list but reply with a warning, and `!botc unregister` still ends the game but can't remove that role and replies with a warning.
 - Manage Roles lets the bot give out **any** role below its own. Keep moderator and admin roles above the bot's role so it can never hand them out.
 
-#### 4. Check channel overrides
+#### 4. Give the bot access to the game channels
 
-Per-channel permission overrides take priority over server-wide permissions. Make sure no override on the admin channel (wherever the Storyteller sends `!botc register`) or on the village voice channels, especially Town Square, denies the bot View Channels, Send Messages, Connect or Move Members.
+Server-wide permissions aren't enough if the game channels are private. A channel or category that hides itself from `@everyone` also hides itself from the bot, unless the bot is let in. Discord doesn't send a bot messages from channels it can't view, so **the bot silently ignores commands there**, even `!botc ping`.
+
+The simplest reliable setup is one category for the whole game, with a permission override for the bot's role:
+
+1. Put every game channel in one category: the admin text channel (where the Storyteller sends `!botc register`, e.g. `botc-storyteller-notes`), any player text channel (e.g. `botc-chat`), and the village voice channels (`Town Square`, `Cathedral`, `Campfire`, `Potion Shop`, `Tower`, `Riverside`, `Storyteller's Corner`).
+2. Open the category's **Edit Category → Permissions**, add the **`BotOnTheClocktower`** role, and allow:
+
+   | Permission | Why |
+   | --- | --- |
+   | View Channels | See commands and the channels it posts in |
+   | Send Messages | Reply to commands and post announcements |
+   | Read Message History | Reply to a command as a threaded reply |
+   | Connect | Required alongside Move Members for voice channels |
+   | Move Members | Move players between voice channels (planned commands) |
+
+3. In each channel's **Permissions** tab, check it says **Synced with category**. If a channel isn't synced, click **Sync Now**, or add the same override to that channel by hand.
+
+Use the bot's **role**, not the bot's user, in the override, so it keeps working if the bot is removed and re-invited. New channels added to the category inherit the override automatically. Don't give the bot Administrator: it would work, but it's far more access than the bot needs.
+
+`!botc register` checks these permissions and lists any that are missing, channel by channel.
+
+**If the bot doesn't respond at all:** send `!botc ping` in a channel the bot can certainly see (e.g. a public text channel). If it answers there but not in a game channel, that channel is hiding itself from the bot; fix its permissions as above. If it answers nowhere, check the bot is running and that it's in the server.
 
 #### Who becomes Storyteller
 
@@ -175,7 +196,7 @@ Commands only work from the admin channel, and only for the Storyteller:
 | Command | What it does |
 | --- | --- |
 | `!botc ping` | Replies `pong`. Use it to check the bot is online. Works for anyone before a game is registered, and for the Storyteller from any channel once one is. |
-| `!botc register` or `!botc start` | Starts a game. Makes the current channel the admin channel and the Town Square voice channel the game channel, and posts a "new game" announcement in Town Square's text chat. Makes the sender the Storyteller and gives them the `BoTC-StoryTeller` role. Apart from `ping`, the only command that works before a game is registered. Refused if a game is already registered, or if there's no voice channel named `Town Square`. |
+| `!botc register` or `!botc start` | Starts a game. Makes the current channel the admin channel and the Town Square voice channel the game channel, and posts a "new game" announcement in Town Square's text chat. Makes the sender the Storyteller and gives them the `BoTC-StoryTeller` role. Apart from `ping`, the only command that works before a game is registered. Refused if a game is already registered, or if there's no voice channel named `Town Square`. Warns if the bot is missing permissions in the admin channel or the village voice channels (see [Server Setup](#4-give-the-bot-access-to-the-game-channels)). |
 | `!botc unregister` or `!botc end` | Ends the game. Removes `BoTC-StoryTeller` and `BoTC-Player` from every member who has them, posts a "game ended" announcement in Town Square, and clears the game state so a new game can be registered. |
 | `!botc sitrep` | Reports the game's server, the admin and game channels, and the Storyteller. |
 | `!botc map` | Finds the village's voice channels by name and posts "Town Locations Mapped" in the admin channel. |

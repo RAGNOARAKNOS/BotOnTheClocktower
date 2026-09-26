@@ -8,7 +8,7 @@ Every command here has already passed [`allowed`](command-dispatch.md#activity-a
 
 ## Activity: `register`
 
-Whoever sends `!botc register` (or `start`) becomes the Storyteller, and the channel they send it from becomes the admin channel. If the Storyteller role can't be given, registration still succeeds and the reply includes a warning. The "already registered" refusal is only reached by the Storyteller in the admin channel; `allowed` refuses anyone else.
+Whoever sends `!botc register` (or `start`) becomes the Storyteller, and the channel they send it from becomes the admin channel. If the Storyteller role can't be given, or the bot is missing channel permissions, registration still succeeds and the reply includes a warning. The "already registered" refusal is only reached by the Storyteller in the admin channel; `allowed` refuses anyone else.
 
 ```mermaid
 flowchart TD
@@ -22,8 +22,12 @@ flowchart TD
     announce --> role("assignStorytellerRole:<br/>findRoleID(BoTC-StoryTeller), then give it to the sender")
     role --> d3{" "}
     d3 -->|"[role missing, above the bot, or the request failed]"| warn("Add a role warning to the reply")
-    d3 -->|"[role given]"| reply("Reply: Game registered")
-    warn --> reply
+    d3 -->|"[role given]"| perms("channelAccessWarning: the bot's permissions in the<br/>admin channel, Town Square and the other village rooms")
+    warn --> perms
+    perms --> d4{" "}
+    d4 -->|"[a permission missing, or a channel it can't see]"| pwarn("Add a warning listing each channel's<br/>missing permissions")
+    d4 -->|"[all present]"| reply("Reply: Game registered")
+    pwarn --> reply
     refused1 --> refused(((" "))):::final
     refused2 --> refused
     reply --> registered(((" "))):::final
@@ -59,7 +63,11 @@ sequenceDiagram
             opt BoTC-StoryTeller exists
                 Bot->>REST: GuildMemberRoleAdd(guild, Storyteller, role)
             end
-            Bot->>REST: Reply "Game registered..." (with a warning if the role failed)
+            Bot->>REST: GuildChannels(guild), to find the other village rooms
+            loop admin channel, Town Square, each other village room
+                Note over Bot: UserChannelPermissions(bot, channel):<br/>from the state cache, else REST (403 = can't see it)
+            end
+            Bot->>REST: Reply "Game registered..." (with warnings if the role failed or permissions are missing)
         end
     end
     REST-->>ST: Reply in the admin channel
@@ -160,4 +168,4 @@ sequenceDiagram
 
 ---
 
-Last checked against code: 2026-09-27 (4bef1c8)
+Last checked against code: 2026-09-27 (6b0d196)
