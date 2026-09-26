@@ -21,7 +21,6 @@ Rules shared by every command: how messages are recognised as commands, and how 
 
 ## Rules & edge cases
 
-- `pmove` and `cmove` are recognised but currently do nothing and send no reply.
 - A refusal is sent in the channel the command came from, which can be a public channel or a DM, so it names the Storyteller and the admin channel.
 - `register` while a game is registered is caught by the access rule unless it comes from the Storyteller in the admin channel, in which case `register` itself refuses it.
 
@@ -32,7 +31,6 @@ Rules shared by every command: how messages are recognised as commands, and how 
 ## Open questions
 
 - Should unknown commands reply with a help list instead?
-- Should `pmove`/`cmove` reply "not implemented yet", or be removed?
 
 ## Decisions
 
@@ -41,8 +39,10 @@ Rules shared by every command: how messages are recognised as commands, and how 
 - 2026-09-25: Handlers must not `panic`; a `recover` in `newMessage` is the safety net so a bug can't crash the bot and lose the in-memory game.
 - 2026-09-26: Commands only work from the admin channel, and only for the Storyteller. With no game registered only `register` / `start` runs (from any channel, which becomes the admin channel) and everything else is ignored silently. Once registered, commands from anyone else or anywhere else get a refusal. This replaces the per-command checks (`requireStorytellerInAdmin`, and `unregister`'s own), so `ping`, `sitrep` and `map` are no longer open to everyone.
 - 2026-09-26: Exception for `ping`: anyone can ping while no game is registered, and the Storyteller can ping from any channel once one is.
+- 2026-09-27: The `pmove`/`cmove` stubs are removed; they now get the unknown-command reply. Moving players returns with `gather`.
+- 2026-09-27: Stop printing every command word to the console, as whispers and guidance are secret.
 
 ## Implementation
 
 - `newMessage`, `extractCommand` and `commandAllowed` (the access check) in [internal/bot/bot.go](../../internal/bot/bot.go).
-- Every argument is printed to the console (debug output).
+- Message content is never logged, because whispers and character guidance are secret. Send failures are logged by the `reply`/`send` helpers.

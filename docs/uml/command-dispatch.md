@@ -30,9 +30,8 @@ flowchart TD
     cmd -->|"[character]"| chr("character")
     cmd -->|"[grimoire]"| gri("characterList")
     cmd -->|"[whisper]"| whi("whisper")
-    cmd -->|"[pmove, cmove]"| stub("Do nothing (stubs)")
     cmd -->|"[anything else]"| wtf("Reply: Huh? WTF is that command?!")
-    notrun & ping & reg & unreg & sit & maprooms & vil & chr & gri & whi & stub & wtf --> merged{" "}
+    notrun & ping & reg & unreg & sit & maprooms & vil & chr & gri & whi & wtf --> merged{" "}
     merged -->|"[the command panicked]"| rec("Log the stack trace<br/>Reply: Something went wrong")
     merged -->|"[no panic]"| unlock("Unlock Bot.mu")
     rec --> unlock
@@ -109,4 +108,4 @@ flowchart TD
 
 ---
 
-Last checked against code: 2026-09-26 (f517dc2)
+Last checked against code: 2026-09-27 (7fc00d0)

@@ -78,7 +78,7 @@ Which diagram covers which code. When you change one of these functions, update 
 
 - `villageList`, `characterClear`: a single loop and a reply.
 - `sortedNames`, `sortedPlayerIDs`, `playerName`, `ghostVoteState`: formatting helpers.
-- `moveUserToChannel`, `playerNameToId`: not used by any command yet.
+- `reply`, `send`: send a message and log any failure.
 
 ## Keeping the diagrams up to date
 

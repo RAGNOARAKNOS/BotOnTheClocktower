@@ -3,6 +3,7 @@ package bot
 import (
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"runtime/debug"
@@ -67,7 +68,7 @@ func Run(settings Settings) error {
 	}
 
 	discord.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) {
-		fmt.Println("Bot is ready")
+		log.Println("Bot is ready")
 	})
 	discord.AddHandler(b.newMessage)
 
@@ -100,8 +101,9 @@ func (b *Bot) newMessage(discord *discordgo.Session, message *discordgo.MessageC
 	// A panic in a handler would otherwise crash the whole bot and lose the game.
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Printf("Recovered from panic handling %q: %v\n%s", message.Content, r, debug.Stack())
-			b.discord.ChannelMessageSendReply(message.ChannelID, "Something went wrong running that command. Check the bot's logs.", message.Reference())
+			// Log the command name only: the rest of the message can hold game secrets.
+			log.Printf("Recovered from panic handling %q: %v\n%s", msgContents[1], r, debug.Stack())
+			b.reply(message, "Something went wrong running that command. Check the bot's logs.")
 		}
 	}()
 
@@ -109,10 +111,6 @@ func (b *Bot) newMessage(discord *discordgo.Session, message *discordgo.MessageC
 }
 
 func (b *Bot) extractCommand(message *discordgo.MessageCreate, rawText []string) {
-	for i := 0; i < len(rawText); i++ {
-		fmt.Printf("MessageParam# %d MessageParamContent %q \n", i, rawText[i])
-	}
-
 	command := strings.ToLower(rawText[1])
 	if !b.commandAllowed(message, command) {
 		return
@@ -120,7 +118,7 @@ func (b *Bot) extractCommand(message *discordgo.MessageCreate, rawText []string)
 
 	switch command {
 	case "ping":
-		b.discord.ChannelMessageSend(message.ChannelID, "pong")
+		b.send(message.ChannelID, "pong")
 	case "register", "start":
 		b.register(message)
 	case "unregister", "end":
@@ -129,8 +127,8 @@ func (b *Bot) extractCommand(message *discordgo.MessageCreate, rawText []string)
 		b.sitrep(message)
 	case "map":
 		if err := b.mapRooms(); err != nil {
-			fmt.Printf("Could not map rooms: %v \n", err)
-			b.discord.ChannelMessageSendReply(message.ChannelID, fmt.Sprintf("Could not map the town's channels (%v)", err), message.Reference())
+			log.Printf("Could not map rooms: %v", err)
+			b.reply(message, fmt.Sprintf("Could not map the town's channels (%v)", err))
 		}
 	case "village":
 		b.village(message, rawText)
@@ -140,17 +138,27 @@ func (b *Bot) extractCommand(message *discordgo.MessageCreate, rawText []string)
 		b.characterList(message)
 	case "whisper":
 		b.whisper(message)
-	case "pmove":
-	case "cmove":
 	default:
-		fmt.Println("default fall thru")
-		b.discord.ChannelMessageSend(message.ChannelID, "Huh? WTF is that command?!")
+		b.send(message.ChannelID, "Huh? WTF is that command?!")
+	}
+}
+
+// reply answers a command as a threaded reply in the channel it came from.
+// Send failures are logged, as there's nowhere else to report them.
+func (b *Bot) reply(message *discordgo.MessageCreate, text string) {
+	if _, err := b.discord.ChannelMessageSendReply(message.ChannelID, text, message.Reference()); err != nil {
+		log.Printf("Could not reply in channel %s: %v", message.ChannelID, err)
+	}
+}
+
+// send posts a plain message in a channel, logging any failure.
+func (b *Bot) send(channelID, text string) {
+	if _, err := b.discord.ChannelMessageSend(channelID, text); err != nil {
+		log.Printf("Could not post in channel %s: %v", channelID, err)
 	}
 }
 
 func (b *Bot) mapRooms() error {
-	fmt.Print(villageCodeLookup)
-
 	allChans, err := b.getMapGuildChannels(b.settings.GuildId)
 	if err != nil {
 		return err
@@ -158,8 +166,6 @@ func (b *Bot) mapRooms() error {
 
 	b.settings.Rooms = make(map[string]string)
 	for index, ch := range allChans {
-		fmt.Printf("index %s, data %s", index, ch)
-
 		for code, room := range villageCodeLookup {
 			if room == ch {
 				b.settings.Rooms[code] = index
@@ -167,8 +173,9 @@ func (b *Bot) mapRooms() error {
 		}
 	}
 
-	fmt.Print(b.settings.Rooms)
-	b.discord.ChannelMessageSendTTS(b.settings.AdminChannelId, "Town Locations Mapped")
+	if _, err := b.discord.ChannelMessageSendTTS(b.settings.AdminChannelId, "Town Locations Mapped"); err != nil {
+		log.Printf("Could not post in channel %s: %v", b.settings.AdminChannelId, err)
+	}
 	return nil
 }
 
@@ -191,7 +198,7 @@ const villageUsage = "Usage: `!botc village create`, `!botc village add @player.
 // village dispatches the village subcommands.
 func (b *Bot) village(message *discordgo.MessageCreate, rawText []string) {
 	if len(rawText) < 3 {
-		b.discord.ChannelMessageSendReply(message.ChannelID, villageUsage, message.Reference())
+		b.reply(message, villageUsage)
 		return
 	}
 
@@ -205,7 +212,7 @@ func (b *Bot) village(message *discordgo.MessageCreate, rawText []string) {
 	case "list":
 		b.villageList(message)
 	default:
-		b.discord.ChannelMessageSendReply(message.ChannelID, villageUsage, message.Reference())
+		b.reply(message, villageUsage)
 	}
 }
 
@@ -215,7 +222,7 @@ func (b *Bot) villageCreate(message *discordgo.MessageCreate) {
 	guild, err := b.discord.State.Guild(b.settings.GuildId)
 	if err != nil {
 		reply := fmt.Sprintf("Could not read who is in <#%s> (%v). This command will not execute", b.settings.GameChannelId, err)
-		b.discord.ChannelMessageSendReply(message.ChannelID, reply, message.Reference())
+		b.reply(message, reply)
 		return
 	}
 
@@ -271,7 +278,7 @@ func (b *Bot) villageCreate(message *discordgo.MessageCreate) {
 // villageAdd adds each mentioned user to the village and gives them BoTC-Player.
 func (b *Bot) villageAdd(message *discordgo.MessageCreate) {
 	if len(message.Mentions) == 0 {
-		b.discord.ChannelMessageSendReply(message.ChannelID, "Mention the players to add. "+villageUsage, message.Reference())
+		b.reply(message, "Mention the players to add. "+villageUsage)
 		return
 	}
 
@@ -312,7 +319,7 @@ func (b *Bot) villageAdd(message *discordgo.MessageCreate) {
 // villageRemove removes each mentioned user from the village and takes BoTC-Player away.
 func (b *Bot) villageRemove(message *discordgo.MessageCreate) {
 	if len(message.Mentions) == 0 {
-		b.discord.ChannelMessageSendReply(message.ChannelID, "Mention the players to remove. "+villageUsage, message.Reference())
+		b.reply(message, "Mention the players to remove. "+villageUsage)
 		return
 	}
 
@@ -346,7 +353,7 @@ func (b *Bot) villageRemove(message *discordgo.MessageCreate) {
 // villageList replies with the current players, numbered and sorted by name.
 func (b *Bot) villageList(message *discordgo.MessageCreate) {
 	if len(b.settings.Players) == 0 {
-		b.discord.ChannelMessageSendReply(message.ChannelID, "The village is empty. Use `!botc village create` or `!botc village add @player`.", message.Reference())
+		b.reply(message, "The village is empty. Use `!botc village create` or `!botc village add @player`.")
 		return
 	}
 
@@ -355,7 +362,7 @@ func (b *Bot) villageList(message *discordgo.MessageCreate) {
 	for i, name := range sortedNames(b.settings.Players) {
 		fmt.Fprintf(&sb, "\n%d. %s", i+1, name)
 	}
-	b.discord.ChannelMessageSendReply(message.ChannelID, sb.String(), message.Reference())
+	b.reply(message, sb.String())
 }
 
 // commandAllowed reports whether a command may run, and is checked before every command.
@@ -369,7 +376,7 @@ func (b *Bot) commandAllowed(message *discordgo.MessageCreate, command string) b
 		if command == "register" || command == "start" || command == "ping" {
 			return true
 		}
-		fmt.Printf("Ignoring %q: no game registered \n", command)
+		log.Printf("Ignoring %q: no game registered", command)
 		return false
 	}
 
@@ -379,7 +386,7 @@ func (b *Bot) commandAllowed(message *discordgo.MessageCreate, command string) b
 
 	if message.GuildID != b.settings.GuildId || message.Author.ID != b.settings.StoryTellerId || message.ChannelID != b.settings.AdminChannelId {
 		reply := fmt.Sprintf("Commands only work for the Storyteller (<@%s>), in the admin channel <#%s>. This command will not execute", b.settings.StoryTellerId, b.settings.AdminChannelId)
-		b.discord.ChannelMessageSendReply(message.ChannelID, reply, message.Reference())
+		b.reply(message, reply)
 		return false
 	}
 
@@ -416,10 +423,10 @@ func (b *Bot) setPlayerRole(add, remove map[string]string) error {
 // replyWithRoleWarning sends reply, adding a warning if the player role couldn't be updated.
 func (b *Bot) replyWithRoleWarning(message *discordgo.MessageCreate, reply string, roleErr error) {
 	if roleErr != nil {
-		fmt.Printf("Problems updating the %s role: %v \n", playerRoleName, roleErr)
+		log.Printf("Problems updating the %s role: %v", playerRoleName, roleErr)
 		reply += fmt.Sprintf("\nWarning: the %q role could not be fully updated (%v). Check the role exists and sits below the bot's role.", playerRoleName, roleErr)
 	}
-	b.discord.ChannelMessageSendReply(message.ChannelID, reply, message.Reference())
+	b.reply(message, reply)
 }
 
 // lookupMember returns known if it has user details, otherwise the member from
@@ -454,21 +461,6 @@ func sortedNames(players map[string]string) []string {
 	}
 	slices.Sort(names)
 	return names
-}
-
-func (b *Bot) moveUserToChannel(playerID string, destinationChannelCode string) {
-	destChannel := b.settings.Rooms[destinationChannelCode]
-	b.discord.GuildMemberMove(b.settings.GuildId, playerID, &destChannel)
-}
-
-func (b *Bot) playerNameToId(playerName string) string {
-	for key, value := range b.settings.Players {
-		if value == playerName {
-			return key
-		}
-	}
-
-	return ""
 }
 
 // findVoiceChannelID returns the ID of the server's first voice channel with exactly this name.
@@ -566,23 +558,15 @@ func (b *Bot) removeGameRoles(guildID string) (int, error) {
 	return removed, errors.Join(errs...)
 }
 
+// sitrep reports where the game is running. It only runs while a game is registered.
 func (b *Bot) sitrep(message *discordgo.MessageCreate) {
-	var serverstate string
-
-	if b.settings.GameRegistered {
-		serverstate = fmt.Sprintf("Game is initialised at guildid# %s admin channel <#%s> game channel <#%s> storyteller <@%s>", b.settings.GuildId, b.settings.AdminChannelId, b.settings.GameChannelId, b.settings.StoryTellerId)
-	} else {
-		serverstate = "Game is not initialised"
-	}
-
-	sitrep := fmt.Sprintf("SITREP-%s", serverstate)
-	b.discord.ChannelMessageSend(message.ChannelID, sitrep)
+	b.send(message.ChannelID, fmt.Sprintf("SITREP-Game is initialised at guildid# %s admin channel <#%s> game channel <#%s> storyteller <@%s>", b.settings.GuildId, b.settings.AdminChannelId, b.settings.GameChannelId, b.settings.StoryTellerId))
 }
 
 func (b *Bot) register(message *discordgo.MessageCreate) {
 	if b.settings.GameRegistered {
 		reply := fmt.Sprintf("A game is already registered, with <@%s> as the Storyteller. This command will not execute", b.settings.StoryTellerId)
-		b.discord.ChannelMessageSendReply(message.ChannelID, reply, message.Reference())
+		b.reply(message, reply)
 		return
 	}
 
@@ -590,7 +574,7 @@ func (b *Bot) register(message *discordgo.MessageCreate) {
 	gameChannelID, err := b.findVoiceChannelID(message.GuildID, townSquareName)
 	if err != nil {
 		reply := fmt.Sprintf("Could not find the game channel (%v). Create a voice channel named %q, then try again. This command will not execute", err, townSquareName)
-		b.discord.ChannelMessageSendReply(message.ChannelID, reply, message.Reference())
+		b.reply(message, reply)
 		return
 	}
 
@@ -600,16 +584,16 @@ func (b *Bot) register(message *discordgo.MessageCreate) {
 	b.settings.StoryTellerId = message.Author.ID
 	b.settings.GameRegistered = true
 
-	fmt.Printf("The game has been registered at %s admin channel %s game channel %s storyteller %s \n", b.settings.GuildId, b.settings.AdminChannelId, b.settings.GameChannelId, b.settings.StoryTellerId)
+	log.Printf("The game has been registered at %s admin channel %s game channel %s storyteller %s", b.settings.GuildId, b.settings.AdminChannelId, b.settings.GameChannelId, b.settings.StoryTellerId)
 
-	b.discord.ChannelMessageSend(b.settings.GameChannelId, fmt.Sprintf("A new game has begun. <@%s> is the Storyteller.", b.settings.StoryTellerId))
+	b.send(b.settings.GameChannelId, fmt.Sprintf("A new game has begun. <@%s> is the Storyteller.", b.settings.StoryTellerId))
 
 	reply := fmt.Sprintf("Game registered. <@%s> is the Storyteller. This is the admin channel; <#%s> is the game channel.", b.settings.StoryTellerId, b.settings.GameChannelId)
 	if err := b.assignStorytellerRole(b.settings.GuildId, b.settings.StoryTellerId); err != nil {
-		fmt.Printf("Could not assign the %s role: %v \n", storytellerRoleName, err)
+		log.Printf("Could not assign the %s role: %v", storytellerRoleName, err)
 		reply += fmt.Sprintf(" Warning: could not assign the %q role (%v). Check the role exists and sits below the bot's role.", storytellerRoleName, err)
 	}
-	b.discord.ChannelMessageSendReply(message.ChannelID, reply, message.Reference())
+	b.reply(message, reply)
 }
 
 // unregister ends the current game: it removes the game roles from everyone
@@ -619,7 +603,7 @@ func (b *Bot) unregister(message *discordgo.MessageCreate) {
 
 	removed, roleErr := b.removeGameRoles(guildID)
 
-	b.discord.ChannelMessageSend(b.settings.GameChannelId, "The game has ended. Thanks for playing!")
+	b.send(b.settings.GameChannelId, "The game has ended. Thanks for playing!")
 
 	b.settings.GuildId = "UNSET"
 	b.settings.AdminChannelId = "UNSET"
@@ -630,12 +614,12 @@ func (b *Bot) unregister(message *discordgo.MessageCreate) {
 	b.settings.Characters = nil
 	b.settings.Rooms = nil
 
-	fmt.Printf("The game at %s has been unregistered, %d game roles removed \n", guildID, removed)
+	log.Printf("The game at %s has been unregistered, %d game roles removed", guildID, removed)
 
 	reply := fmt.Sprintf("Game ended. Removed %d game role(s).", removed)
 	if roleErr != nil {
-		fmt.Printf("Problems removing game roles: %v \n", roleErr)
+		log.Printf("Problems removing game roles: %v", roleErr)
 		reply += fmt.Sprintf(" Warning: some roles could not be removed (%v). Check the %q and %q roles exist and sit below the bot's role.", roleErr, storytellerRoleName, playerRoleName)
 	}
-	b.discord.ChannelMessageSendReply(message.ChannelID, reply, message.Reference())
+	b.reply(message, reply)
 }

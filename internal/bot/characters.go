@@ -3,6 +3,7 @@ package bot
 import (
 	"errors"
 	"fmt"
+	"log"
 	"regexp"
 	"slices"
 	"strings"
@@ -161,7 +162,7 @@ func parseWhisper(content string) (userID, text string, err error) {
 // character dispatches the character subcommands.
 func (b *Bot) character(message *discordgo.MessageCreate, rawText []string) {
 	if len(rawText) < 3 {
-		b.discord.ChannelMessageSendReply(message.ChannelID, characterUsage, message.Reference())
+		b.reply(message, characterUsage)
 		return
 	}
 
@@ -185,7 +186,7 @@ func (b *Bot) character(message *discordgo.MessageCreate, rawText []string) {
 	case "send":
 		b.characterSend(message)
 	default:
-		b.discord.ChannelMessageSendReply(message.ChannelID, characterUsage, message.Reference())
+		b.reply(message, characterUsage)
 	}
 }
 
@@ -193,13 +194,13 @@ func (b *Bot) character(message *discordgo.MessageCreate, rawText []string) {
 func (b *Bot) characterAssign(message *discordgo.MessageCreate) {
 	userID, team, name, guidance, err := parseAssignment(message.Content)
 	if err != nil {
-		b.discord.ChannelMessageSendReply(message.ChannelID, fmt.Sprintf("Could not read that (%v). %s", err, characterUsage), message.Reference())
+		b.reply(message, fmt.Sprintf("Could not read that (%v). %s", err, characterUsage))
 		return
 	}
 
 	playerName, ok := b.settings.Players[userID]
 	if !ok {
-		b.discord.ChannelMessageSendReply(message.ChannelID, fmt.Sprintf("<@%s> isn't in the village. Add them with `!botc village add` first.", userID), message.Reference())
+		b.reply(message, fmt.Sprintf("<@%s> isn't in the village. Add them with `!botc village add` first.", userID))
 		return
 	}
 
@@ -223,7 +224,7 @@ func (b *Bot) characterAssign(message *discordgo.MessageCreate) {
 		reply += fmt.Sprintf(" This replaces %s.", previous.Name)
 	}
 	reply += " Not sent yet; use `!botc character send`."
-	b.discord.ChannelMessageSendReply(message.ChannelID, reply, message.Reference())
+	b.reply(message, reply)
 }
 
 // characterTeam moves the mentioned players' characters to another team and marks them unsent.
@@ -235,7 +236,7 @@ func (b *Bot) characterTeam(message *discordgo.MessageCreate, rawText []string) 
 		}
 	}
 	if team == "" || len(message.Mentions) == 0 {
-		b.discord.ChannelMessageSendReply(message.ChannelID, "Mention the players and give the team, e.g. `!botc character team @player evil`.", message.Reference())
+		b.reply(message, "Mention the players and give the team, e.g. `!botc character team @player evil`.")
 		return
 	}
 
@@ -259,14 +260,14 @@ func (b *Bot) characterTeam(message *discordgo.MessageCreate, rawText []string) 
 	if len(skipped) > 0 {
 		reply += "\nSkipped: " + strings.Join(skipped, ", ")
 	}
-	b.discord.ChannelMessageSendReply(message.ChannelID, reply, message.Reference())
+	b.reply(message, reply)
 }
 
 // characterSetAlive kills or revives the mentioned players. Nothing is posted
 // publicly until `character announce`.
 func (b *Bot) characterSetAlive(message *discordgo.MessageCreate, alive bool) {
 	if len(message.Mentions) == 0 {
-		b.discord.ChannelMessageSendReply(message.ChannelID, "Mention the players. "+characterUsage, message.Reference())
+		b.reply(message, "Mention the players. "+characterUsage)
 		return
 	}
 
@@ -304,13 +305,13 @@ func (b *Bot) characterSetAlive(message *discordgo.MessageCreate, alive bool) {
 	} else {
 		reply += "\nNothing is waiting to be announced."
 	}
-	b.discord.ChannelMessageSendReply(message.ChannelID, reply, message.Reference())
+	b.reply(message, reply)
 }
 
 // characterGhostVote switches the mentioned dead players' ghost votes between used and available.
 func (b *Bot) characterGhostVote(message *discordgo.MessageCreate) {
 	if len(message.Mentions) == 0 {
-		b.discord.ChannelMessageSendReply(message.ChannelID, "Mention the dead players whose ghost vote to change. "+characterUsage, message.Reference())
+		b.reply(message, "Mention the dead players whose ghost vote to change. "+characterUsage)
 		return
 	}
 
@@ -333,7 +334,7 @@ func (b *Bot) characterGhostVote(message *discordgo.MessageCreate) {
 	if len(skipped) > 0 {
 		reply += "\nSkipped: " + strings.Join(skipped, ", ")
 	}
-	b.discord.ChannelMessageSendReply(message.ChannelID, reply, message.Reference())
+	b.reply(message, reply)
 }
 
 // characterAnnounce posts the deaths and revivals since the last announcement in
@@ -341,7 +342,7 @@ func (b *Bot) characterGhostVote(message *discordgo.MessageCreate) {
 func (b *Bot) characterAnnounce(message *discordgo.MessageCreate) {
 	died, revived := pendingLifeChanges(b.settings.Players, b.settings.Characters)
 	if len(died)+len(revived) == 0 {
-		b.discord.ChannelMessageSendReply(message.ChannelID, "Nothing to announce: no deaths or revivals since the last announcement.", message.Reference())
+		b.reply(message, "Nothing to announce: no deaths or revivals since the last announcement.")
 		return
 	}
 
@@ -355,21 +356,21 @@ func (b *Bot) characterAnnounce(message *discordgo.MessageCreate) {
 	announcement := strings.Join(lines, "\n")
 
 	if _, err := b.discord.ChannelMessageSend(b.settings.GameChannelId, announcement); err != nil {
-		fmt.Printf("Could not post the announcement: %v \n", err)
-		b.discord.ChannelMessageSendReply(message.ChannelID, fmt.Sprintf("Could not post in <#%s> (%v). Nothing was marked as announced.", b.settings.GameChannelId, err), message.Reference())
+		log.Printf("Could not post the announcement: %v", err)
+		b.reply(message, fmt.Sprintf("Could not post in <#%s> (%v). Nothing was marked as announced.", b.settings.GameChannelId, err))
 		return
 	}
 
 	for _, c := range b.settings.Characters {
 		c.AnnouncedAlive = c.Alive
 	}
-	b.discord.ChannelMessageSendReply(message.ChannelID, fmt.Sprintf("Announced in <#%s>:\n%s", b.settings.GameChannelId, announcement), message.Reference())
+	b.reply(message, fmt.Sprintf("Announced in <#%s>:\n%s", b.settings.GameChannelId, announcement))
 }
 
 // characterClear removes the stored characters of the mentioned players.
 func (b *Bot) characterClear(message *discordgo.MessageCreate) {
 	if len(message.Mentions) == 0 {
-		b.discord.ChannelMessageSendReply(message.ChannelID, "Mention the players to clear. "+characterUsage, message.Reference())
+		b.reply(message, "Mention the players to clear. "+characterUsage)
 		return
 	}
 
@@ -390,14 +391,14 @@ func (b *Bot) characterClear(message *discordgo.MessageCreate) {
 	if len(skipped) > 0 {
 		reply += "\nNo character to clear: " + strings.Join(skipped, ", ")
 	}
-	b.discord.ChannelMessageSendReply(message.ChannelID, reply, message.Reference())
+	b.reply(message, reply)
 }
 
 // characterList replies with the grimoire: every village player's character,
 // team, life state and whether it has been sent, with totals at the top.
 func (b *Bot) characterList(message *discordgo.MessageCreate) {
 	if len(b.settings.Players) == 0 {
-		b.discord.ChannelMessageSendReply(message.ChannelID, "The village is empty. Use `!botc village create` first.", message.Reference())
+		b.reply(message, "The village is empty. Use `!botc village create` first.")
 		return
 	}
 
@@ -413,7 +414,7 @@ func (b *Bot) characterList(message *discordgo.MessageCreate) {
 	}
 
 	for _, chunk := range chunkLines(lines, maxMessageLength) {
-		b.discord.ChannelMessageSendReply(message.ChannelID, chunk, message.Reference())
+		b.reply(message, chunk)
 	}
 }
 
@@ -568,7 +569,7 @@ func (b *Bot) characterSend(message *discordgo.MessageCreate) {
 		embed := b.dmEmbed(fmt.Sprintf("Your character: %s (%s)", c.Name, c.Team), c.Guidance)
 		name := b.playerName(id, id)
 		if err := b.sendDM(id, embed); err != nil {
-			fmt.Printf("Could not DM %s their character: %v \n", id, err)
+			log.Printf("Could not DM %s their character: %v", id, err)
 			failed = append(failed, fmt.Sprintf("%s (%s)", name, dmErrorReason(err)))
 			continue
 		}
@@ -601,30 +602,30 @@ func (b *Bot) characterSend(message *discordgo.MessageCreate) {
 	if len(missing) > 0 {
 		reply += "\nVillage players with no character yet: " + strings.Join(missing, ", ")
 	}
-	b.discord.ChannelMessageSendReply(message.ChannelID, reply, message.Reference())
+	b.reply(message, reply)
 }
 
 // whisper DMs a village player a secret message from the Storyteller straight away.
 func (b *Bot) whisper(message *discordgo.MessageCreate) {
 	userID, text, err := parseWhisper(message.Content)
 	if err != nil {
-		b.discord.ChannelMessageSendReply(message.ChannelID, fmt.Sprintf("Could not read that (%v). %s", err, whisperUsage), message.Reference())
+		b.reply(message, fmt.Sprintf("Could not read that (%v). %s", err, whisperUsage))
 		return
 	}
 
 	playerName, ok := b.settings.Players[userID]
 	if !ok {
-		b.discord.ChannelMessageSendReply(message.ChannelID, fmt.Sprintf("<@%s> isn't in the village. This command will not execute", userID), message.Reference())
+		b.reply(message, fmt.Sprintf("<@%s> isn't in the village. This command will not execute", userID))
 		return
 	}
 
 	if err := b.sendDM(userID, b.dmEmbed("A message from the Storyteller", text)); err != nil {
-		fmt.Printf("Could not whisper to %s: %v \n", userID, err)
-		b.discord.ChannelMessageSendReply(message.ChannelID, fmt.Sprintf("Could not whisper to %s (%s).", playerName, dmErrorReason(err)), message.Reference())
+		log.Printf("Could not whisper to %s: %v", userID, err)
+		b.reply(message, fmt.Sprintf("Could not whisper to %s (%s).", playerName, dmErrorReason(err)))
 		return
 	}
 
-	b.discord.ChannelMessageSendReply(message.ChannelID, fmt.Sprintf("Whispered to %s.", playerName), message.Reference())
+	b.reply(message, fmt.Sprintf("Whispered to %s.", playerName))
 }
 
 // sendDM sends an embed to the user in a direct message.

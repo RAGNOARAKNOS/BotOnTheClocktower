@@ -32,4 +32,4 @@ Channels and the Storyteller appear as clickable mentions. The server is shown a
 ## Implementation
 
 - `sitrep` in [internal/bot/bot.go](../../internal/bot/bot.go).
-- Its "Game is not initialised" branch can no longer be reached, because the access check ignores commands when no game is registered.
+- It has no "no game" branch: the access check ignores it when no game is registered.

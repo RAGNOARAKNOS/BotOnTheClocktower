@@ -144,7 +144,7 @@ sequenceDiagram
 
 ## Sequence: `sitrep`
 
-`sitrep` still has a "Game is not initialised" branch, but `commandAllowed` ignores every command except `register` and `ping` while no game is registered, so that branch is never reached.
+`sitrep` only runs while a game is registered: `commandAllowed` ignores it otherwise.
 
 ```mermaid
 sequenceDiagram
@@ -160,4 +160,4 @@ sequenceDiagram
 
 ---
 
-Last checked against code: 2026-09-26 (f517dc2)
+Last checked against code: 2026-09-27 (7fc00d0)

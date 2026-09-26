@@ -238,7 +238,7 @@ During the NIGHT phase, all players are placed into individually allocated "Cott
 
 Also, at the end of the DAY phase when the town gathers for nominations - *some* players have the tendency to dilly dally in the side channels, this will forceably move the players into "Town Square".
 
-Done so far: game registration with the sender as Storyteller (`!botc register`), mapping the village's voice channels (`!botc map`), and an internal helper for moving a player to a channel. Also done: the player list (`!botc village`). Still to do: the `gather` command itself and "Cottage-XX" channels. The `pmove` and `cmove` commands are placeholders that currently do nothing.
+Done so far: game registration with the sender as Storyteller (`!botc register`), mapping the village's voice channels (`!botc map`), and the player list (`!botc village`). Still to do: moving players, the `gather` command itself and "Cottage-XX" channels.
 
 ### Sending Players to Sleep
 

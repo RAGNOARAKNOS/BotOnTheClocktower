@@ -66,7 +66,7 @@ Intended behaviour lives in `docs/specs/`, one file per feature (index and workf
   - `ping` → replies `pong`
   - `register` / `start` → refused if `GameRegistered` is already true, or if `findVoiceChannelID` can't find a voice channel named `villageCodeLookup["TS"]` (Town Square). Otherwise sets `AdminChannelId` to the message's channel and `GameChannelId` to Town Square, sets `StoryTellerId` to the sender, sets `GameRegistered`, posts a start announcement in the game channel, and gives the sender the `BoTC-StoryTeller` Discord role via `assignStorytellerRole` (looks the role up by exact name via `findRoleID`; role names are the `storytellerRoleName`/`playerRoleName` constants; if that fails, registration still succeeds and the reply includes a warning).
   - `unregister` / `end` → `removeGameRoles` pages through all guild members (`GuildMembers`, 1000 per page) and strips both game roles from anyone who has them, collecting errors with `errors.Join` rather than stopping. Then it posts an end announcement in the game channel, resets settings to `"UNSET"`/false/nil, and replies with the count plus any warnings.
-  - `sitrep` → reports the guild, admin/game channels and Storyteller (its "not initialised" branch is unreachable behind `commandAllowed`)
+  - `sitrep` → reports the guild, admin/game channels and Storyteller
 - The bot never joins voice; it has no audio features, and moving members (`GuildMemberMove`) doesn't require it. Don't add `ChannelVoiceJoin` back.
 - Channel routing: command replies go to the channel the command came from (so the admin channel, except for `register`, `ping` and refusals); admin output (e.g. `mapRooms`' TTS) goes to `AdminChannelId`; player-facing announcements go to `GameChannelId` (Town Square's text-in-voice chat).
   - `map` → `mapRooms` resolves channel IDs for the names in `villageCodeLookup` (codes `TS`, `CA`, `CF`, `PS`, `TW`, `RS`, `SC`) into `Settings.Rooms`. It doesn't touch players.
@@ -75,9 +75,7 @@ Intended behaviour lives in `docs/specs/`, one file per feature (index and workf
   - Deaths: `kill`/`revive` only change `Alive`; `AnnouncedAlive` holds the state at the last `announce`, and `pendingLifeChanges` (where they differ) drives `announce` (posts to `GameChannelId`) and the grimoire. `revive` resets `GhostVoteUsed`.
   - `grimoire` is an alias for `character list`: `grimoireSummary` totals plus a `grimoireLine` per player, split into 2000-character messages by `chunkLines`.
   - `whisper @player <text>` → DMs a village player straight away; nothing is stored.
-  - `pmove`, `cmove` → empty stubs
   - anything else (reaching the switch) → "Huh? WTF is that command?!"
-- Helpers `moveUserToChannel` (uses `GuildMemberMove` with a room code) and `playerNameToId` exist but aren't wired to commands yet.
 
 ## Things to know before changing code
 
@@ -85,9 +83,9 @@ Intended behaviour lives in `docs/specs/`, one file per feature (index and workf
 - **Game state is in-memory only** in `Bot.settings` and is lost on restart. Only touch it from within command handling, where `Bot.mu` is held; add locking if you ever read it from another handler or goroutine.
 - **Access is global:** `commandAllowed` restricts every command to the Storyteller in the admin channel, so new commands need no access check of their own. `register`/`start` and `ping` are the only commands that run with no game registered, and `ping` is the only one the Storyteller can send outside the admin channel; add any other exception to `commandAllowed`.
 - **Incomplete pieces:** `villageCodeLookup` has no "Cottage-XX" entries even though the planned features rely on them.
-- **Error handling:** don't `panic`; return errors and reply to the channel. Many Discord call return values (mostly message sends) are still ignored.
+- **Error handling:** don't `panic`; return errors and reply to the channel. Send replies with `b.reply` (threaded) or `b.send` (plain), which log send failures; don't call `ChannelMessageSend*` directly without checking the error.
 - **UML diagrams:** when you change a function listed in the source map in `docs/uml/README.md`, update the affected diagrams in the same change; when you add a command, add its diagram and a source-map row. The steps, including how to validate the Mermaid, are in that README's *Sync procedure*; `/uml-sync` (Claude Code) and the `uml-sync` prompt (Copilot) run it.
-- Lots of `fmt.Print*` debug output — there's no structured logging yet.
+- **Logging:** use the standard `log` package. Never log message content: whispers and character guidance are secrets.
 - The module path is `github.com/RAGNOARAKNOS/BotOnTheClocktower` (uppercase), even though the local checkout directory is lowercase. Use the module path in imports.
 
 ## Roadmap: OBS integration
