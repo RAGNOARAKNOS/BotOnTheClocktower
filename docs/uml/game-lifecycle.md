@@ -4,11 +4,11 @@
 
 Starting and ending a game, and the commands that report on it or prepare it. Covers `register`, `unregister`, `removeGameRoles`, `mapRooms`, `sitrep` and their helpers in [internal/bot/game.go](../../internal/bot/game.go) and [internal/bot/roles.go](../../internal/bot/roles.go). The bot runs one game at a time.
 
-Every command here has already passed [`commandAllowed`](command-dispatch.md#activity-commandallowed): `register` runs from anywhere when no game is registered, and everything else, including `register` once a game exists, only runs for the Storyteller in the admin channel.
+Every command here has already passed [`allowed`](command-dispatch.md#activity-allowed): `register` runs from anywhere when no game is registered, and everything else, including `register` once a game exists, only runs for the Storyteller in the admin channel.
 
 ## Activity: `register`
 
-Whoever sends `!botc register` (or `start`) becomes the Storyteller, and the channel they send it from becomes the admin channel. If the Storyteller role can't be given, registration still succeeds and the reply includes a warning. The "already registered" refusal is only reached by the Storyteller in the admin channel; `commandAllowed` refuses anyone else.
+Whoever sends `!botc register` (or `start`) becomes the Storyteller, and the channel they send it from becomes the admin channel. If the Storyteller role can't be given, registration still succeeds and the reply includes a warning. The "already registered" refusal is only reached by the Storyteller in the admin channel; `allowed` refuses anyone else.
 
 ```mermaid
 flowchart TD
@@ -67,7 +67,7 @@ sequenceDiagram
 
 ## Activity: `unregister`
 
-`commandAllowed` has already checked that a game is registered and that the Storyteller sent this from the admin channel. `removeGameRoles` takes both game roles from **every** member who has them, including roles given out by hand, and carries on past individual failures.
+`allowed` has already checked that a game is registered and that the Storyteller sent this from the admin channel. `removeGameRoles` takes both game roles from **every** member who has them, including roles given out by hand, and carries on past individual failures.
 
 ```mermaid
 flowchart TD
@@ -144,7 +144,7 @@ sequenceDiagram
 
 ## Sequence: `sitrep`
 
-`sitrep` only runs while a game is registered: `commandAllowed` ignores it otherwise.
+`sitrep` only runs while a game is registered: `allowed` ignores it otherwise.
 
 ```mermaid
 sequenceDiagram

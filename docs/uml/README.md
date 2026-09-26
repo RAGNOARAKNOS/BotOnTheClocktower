@@ -11,7 +11,7 @@ All diagrams are written in [Mermaid](https://mermaid.js.org/), which GitHub ren
 | File | Activity diagrams | Sequence diagrams |
 | --- | --- | --- |
 | [startup.md](startup.md) | Startup and shutdown | Startup and shutdown |
-| [command-dispatch.md](command-dispatch.md) | Handling a message, `commandAllowed` | Handling a message |
+| [command-dispatch.md](command-dispatch.md) | Handling a message, `allowed` | Handling a message |
 | [game-lifecycle.md](game-lifecycle.md) | `register`, `unregister` | `register`, `unregister`, `map`, `sitrep` |
 | [village.md](village.md) | `village` dispatch, `create`, `add`, `remove` | `village create` |
 | [characters.md](characters.md) | `character assign`, `kill`/`revive`, `ghostvote`, `team`, `announce` | `announce`, `send`, `grimoire`, `whisper` |
@@ -50,7 +50,7 @@ Participants in the sequence diagrams:
 - **discordgo State cache**: discordgo's in-memory copy of guilds, members and voice states.
 - **Discord REST API**: every call the bot makes, such as `ChannelMessageSend`, `GuildRoles`, `GuildMemberRoleAdd` or `UserChannelCreate`.
 
-Replies to a command always go to the channel the command came from. Apart from `register` and `ping`, every command only runs for the Storyteller in the admin channel (`commandAllowed`), so that's where replies go, apart from `register`, `ping` and refusals.
+Replies to a command always go to the channel the command came from. Apart from `register` and `ping`, every command only runs for the Storyteller in the admin channel (`allowed`), so that's where replies go, apart from `register`, `ping` and refusals.
 
 ## Source map
 
@@ -59,8 +59,9 @@ Which diagram covers which code. When you change one of these functions, update 
 | Code | Diagram |
 | --- | --- |
 | `cmd/bot/main.go` `main`, `config.Load`, `bot.Run` | [startup.md](startup.md) |
-| `newMessage`, `extractCommand` | [command-dispatch.md](command-dispatch.md) |
-| `commandAllowed` | [command-dispatch.md](command-dispatch.md) |
+| `newMessage`, `extractCommand`, `commands` | [command-dispatch.md](command-dispatch.md) |
+| `allowed` | [command-dispatch.md](command-dispatch.md) |
+| `mapCommand` | [game-lifecycle.md](game-lifecycle.md) |
 | `register`, `newGame`, `findVoiceChannelID`, `assignStorytellerRole`, `findRoleID` | [game-lifecycle.md](game-lifecycle.md) |
 | `unregister`, `removeGameRoles` | [game-lifecycle.md](game-lifecycle.md) |
 | `mapRooms`, `getMapGuildChannels`, `villageCodeLookup` | [game-lifecycle.md](game-lifecycle.md) |
@@ -78,7 +79,7 @@ Which diagram covers which code. When you change one of these functions, update 
 
 - `villageList`, `characterClear`: a single loop and a reply.
 - `sortedNames`, `sortedPlayerIDs`, `playerName`, `ghostVoteState`: formatting helpers.
-- `reply`, `send`: send a message and log any failure.
+- `reply`, `send`: send a message and log any failure. `ping`: sends `pong`.
 
 ## Keeping the diagrams up to date
 

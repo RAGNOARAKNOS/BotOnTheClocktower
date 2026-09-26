@@ -9,7 +9,7 @@ import (
 
 // characterList replies with the grimoire: every village player's character,
 // team, life state and whether it has been sent, with totals at the top.
-func (b *Bot) characterList(message *discordgo.MessageCreate) {
+func (b *Bot) characterList(message *discordgo.MessageCreate, _ []string) {
 	if len(b.game.Players) == 0 {
 		b.reply(message, "The village is empty. Use `!botc village create` first.")
 		return

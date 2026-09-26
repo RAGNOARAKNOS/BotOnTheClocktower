@@ -44,7 +44,7 @@ Configuration: `BOTAPIKEY` (Discord bot token), read from the environment or fro
 - `internal/config/config.go` — loads `.env` (a missing file is fine) and returns a `Config` holding the bot token.
 - `internal/bot/` — one package, one file per feature. Keep files under about 300 lines; add a new file for a new feature.
   - `bot.go` — the `Bot` struct, `Run` (session setup) and `newMessage` (lock, recover).
-  - `commands.go` — `extractCommand` (dispatch), `commandAllowed` (access), and the `reply`/`send` helpers.
+  - `commands.go` — the `commands` table (name and alias → handler plus access flags), `extractCommand` (dispatch), `allowed` (access), `ping`, and the `reply`/`send` helpers.
   - `game.go` — `Game` (the registered game's state), `register`, `unregister`, `sitrep`, `map`.
   - `village.go` — the `village` commands. `roles.go` — Discord role lookups and changes. `discord.go` — member and channel lookups.
   - `characters.go` — the `character` commands and `Character`. `grimoire.go` — `character list`/`grimoire` output. `whisper.go` — `whisper` and the DM helpers.
@@ -66,8 +66,8 @@ Intended behaviour lives in `docs/specs/`, one file per feature (index and workf
 - `bot.Run` opens a discordgo session with `IntentsAll`, registers a `Ready` handler and `newMessage`, then blocks until SIGINT/SIGTERM.
 - `newMessage` ignores messages from any bot (including itself), splits the content with `strings.Fields`, and dispatches when the first token equals `!botc` (case-insensitive) and there are at least two tokens. The second token, lowercased, is the command.
 - `newMessage` holds `Bot.mu` for the whole command, so commands run one at a time (discordgo runs each handler in its own goroutine). It also recovers panics, logging the stack and replying with an error, so a bug doesn't kill the bot and lose the in-memory game. Don't call anything that re-enters the message handler while holding the lock.
-- Access (`commandAllowed`, checked in `extractCommand` before the switch, for every command): with no game registered, only `register`/`start` and `ping` run, from any channel, and everything else (including unknown commands) is ignored silently. Once registered, every command must come from `StorytellerID`, in `AdminChannelID`, in `GuildID`, except `ping`, which only needs to come from `StorytellerID`; anything else gets a refusal reply. Command handlers don't repeat these checks.
-- Commands (`extractCommand` switch):
+- Access (`allowed`, a pure function checked in `extractCommand` for every command, tested in `commands_test.go`): with no game registered, only commands marked `beforeGame` (`register`/`start`, `ping`) run, from any channel, and everything else (including unknown commands) is ignored silently. Once registered, every command must come from `StorytellerID`, in `AdminChannelID`, in `GuildID`; commands marked `anyChannel` (`ping`) only need `StorytellerID`. Anything else gets a refusal reply. Command handlers don't repeat these checks.
+- Commands (entries in the `commands` table; every handler has the signature `func(b *Bot, message *discordgo.MessageCreate, words []string)`):
   - `ping` → replies `pong`
   - `register` / `start` → refused if `b.game` is already set, or if `findVoiceChannelID` can't find a voice channel named `villageCodeLookup["TS"]` (Town Square). Otherwise creates the game with `newGame` (admin channel = the message's channel, game channel = Town Square, Storyteller = the sender), posts a start announcement in the game channel, and gives the sender the `BoTC-StoryTeller` Discord role via `assignStorytellerRole` (looks the role up by exact name via `findRoleID`; role names are the `storytellerRoleName`/`playerRoleName` constants; if that fails, registration still succeeds and the reply includes a warning).
   - `unregister` / `end` → `removeGameRoles` pages through all guild members (`GuildMembers`, 1000 per page) and strips both game roles from anyone who has them, collecting errors with `errors.Join` rather than stopping. Then it posts an end announcement in the game channel, sets `b.game` to nil, and replies with the count plus any warnings.
@@ -86,7 +86,7 @@ Intended behaviour lives in `docs/specs/`, one file per feature (index and workf
 
 - **Keep the README in step.** Every command is `!botc <command>`. When you add or change a command, update the README's Commands table (and its Features section if the feature's status changes).
 - **Game state is in-memory only** in `Bot.game` (`nil` = no game registered) and is lost on restart. Only touch it from within command handling, where `Bot.mu` is held; add locking if you ever read it from another handler or goroutine.
-- **Access is global:** `commandAllowed` restricts every command to the Storyteller in the admin channel, so new commands need no access check of their own. `register`/`start` and `ping` are the only commands that run with no game registered, and `ping` is the only one the Storyteller can send outside the admin channel; add any other exception to `commandAllowed`.
+- **Adding a command** is one entry in the `commands` table in `commands.go`. By default it's Storyteller-only, from the admin channel, with a game registered; set `beforeGame` or `anyChannel` only when the spec says so, and add a case to `TestAllowed` if the access is new. Handlers need no access check of their own.
 - **Incomplete pieces:** `villageCodeLookup` has no "Cottage-XX" entries even though the planned features rely on them.
 - **Error handling:** don't `panic`; return errors and reply to the channel. Send replies with `b.reply` (threaded) or `b.send` (plain), which log send failures; don't call `ChannelMessageSend*` directly without checking the error.
 - **UML diagrams:** when you change a function listed in the source map in `docs/uml/README.md`, update the affected diagrams in the same change; when you add a command, add its diagram and a source-map row. The steps, including how to validate the Mermaid, are in that README's *Sync procedure*; `/uml-sync` (Claude Code) and the `uml-sync` prompt (Copilot) run it.
@@ -106,7 +106,7 @@ Intended behaviour lives in `docs/specs/`, one file per feature (index and workf
 Where the roadmap doesn't match the current code:
 
 - It says "add OBS config fields to Settings in config.go"; there's no `Settings` any more. Add them to `config.Config` and pass them to the bot from `main`.
-- It says to gate commands behind a "Storyteller check (same pattern as `register`)", but `register` has no such check. No per-command check is needed: `commandAllowed` already restricts every command, including `obs` ones, to the Storyteller in the admin channel.
+- It says to gate commands behind a "Storyteller check (same pattern as `register`)", but `register` has no such check. No per-command check is needed: an `obs` entry in the `commands` table is Storyteller-only, from the admin channel, by default.
 - Phase 3 hooks into bedtime/wake commands that don't exist yet.
 
 ## CI/CD

@@ -9,7 +9,7 @@ import (
 )
 
 // whisper DMs a village player a secret message from the Storyteller straight away.
-func (b *Bot) whisper(message *discordgo.MessageCreate) {
+func (b *Bot) whisper(message *discordgo.MessageCreate, _ []string) {
 	userID, text, err := parseWhisper(message.Content)
 	if err != nil {
 		b.reply(message, fmt.Sprintf("Could not read that (%v). %s", err, whisperUsage))

@@ -41,7 +41,7 @@ var villageCodeLookup = map[string]string{
 	"SC": "Storyteller's Corner",
 }
 
-func (b *Bot) register(message *discordgo.MessageCreate) {
+func (b *Bot) register(message *discordgo.MessageCreate, _ []string) {
 	if b.game != nil {
 		reply := fmt.Sprintf("A game is already registered, with <@%s> as the Storyteller. This command will not execute", b.game.StorytellerID)
 		b.reply(message, reply)
@@ -72,7 +72,7 @@ func (b *Bot) register(message *discordgo.MessageCreate) {
 
 // unregister ends the current game: it removes the game roles from everyone
 // and forgets the game so a new one can be registered.
-func (b *Bot) unregister(message *discordgo.MessageCreate) {
+func (b *Bot) unregister(message *discordgo.MessageCreate, _ []string) {
 	guildID := b.game.GuildID
 
 	removed, roleErr := b.removeGameRoles(guildID)
@@ -92,10 +92,19 @@ func (b *Bot) unregister(message *discordgo.MessageCreate) {
 }
 
 // sitrep reports where the game is running. It only runs while a game is registered.
-func (b *Bot) sitrep(message *discordgo.MessageCreate) {
+func (b *Bot) sitrep(message *discordgo.MessageCreate, _ []string) {
 	b.send(message.ChannelID, fmt.Sprintf("SITREP-Game is initialised at guildid# %s admin channel <#%s> game channel <#%s> storyteller <@%s>", b.game.GuildID, b.game.AdminChannelID, b.game.GameChannelID, b.game.StorytellerID))
 }
 
+// mapCommand runs `!botc map`, replying if the channels couldn't be read.
+func (b *Bot) mapCommand(message *discordgo.MessageCreate, _ []string) {
+	if err := b.mapRooms(); err != nil {
+		log.Printf("Could not map rooms: %v", err)
+		b.reply(message, fmt.Sprintf("Could not map the town's channels (%v)", err))
+	}
+}
+
+// mapRooms records the IDs of the channels named in villageCodeLookup in Game.Rooms.
 func (b *Bot) mapRooms() error {
 	allChans, err := b.getMapGuildChannels(b.game.GuildID)
 	if err != nil {

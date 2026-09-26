@@ -6,7 +6,7 @@ The village is the list of players in the game (`Game.Players`, user ID → disp
 
 ## Activity: `village` dispatch
 
-Like every command, `village` only runs for the Storyteller in the admin channel; [`commandAllowed`](command-dispatch.md#activity-commandallowed) checks that before `village` is called.
+Like every command, `village` only runs for the Storyteller in the admin channel; [`allowed`](command-dispatch.md#activity-allowed) checks that before `village` is called.
 
 ```mermaid
 flowchart TD
@@ -60,7 +60,7 @@ sequenceDiagram
     participant REST as Discord REST API
 
     ST->>Bot: !botc village create
-    Note over Bot: commandAllowed has passed
+    Note over Bot: allowed has passed
     Bot->>State: Guild(GuildID)
     State-->>Bot: Guild, with voice states
     Note over Bot,State: Under State.RLock: voice states in Town Square,<br/>except the Storyteller's

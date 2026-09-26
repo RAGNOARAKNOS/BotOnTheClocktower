@@ -8,65 +8,76 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-func (b *Bot) extractCommand(message *discordgo.MessageCreate, rawText []string) {
-	command := strings.ToLower(rawText[1])
-	if !b.commandAllowed(message, command) {
+// command is one `!botc <name>` command. By default a command only runs while a game
+// is registered, for the Storyteller, in the admin channel; the flags relax that.
+type command struct {
+	run func(b *Bot, message *discordgo.MessageCreate, words []string)
+	// beforeGame lets anyone run the command, from any channel, while no game is registered.
+	beforeGame bool
+	// anyChannel lets the Storyteller run the command outside the admin channel.
+	anyChannel bool
+}
+
+// commands maps each command name, and each alias, to its command.
+var commands = map[string]command{
+	"ping":       {run: (*Bot).ping, beforeGame: true, anyChannel: true},
+	"register":   {run: (*Bot).register, beforeGame: true},
+	"start":      {run: (*Bot).register, beforeGame: true},
+	"unregister": {run: (*Bot).unregister},
+	"end":        {run: (*Bot).unregister},
+	"sitrep":     {run: (*Bot).sitrep},
+	"map":        {run: (*Bot).mapCommand},
+	"village":    {run: (*Bot).village},
+	"character":  {run: (*Bot).character},
+	"grimoire":   {run: (*Bot).characterList},
+	"whisper":    {run: (*Bot).whisper},
+}
+
+// extractCommand runs the command named by the second word, if the sender may run it.
+func (b *Bot) extractCommand(message *discordgo.MessageCreate, words []string) {
+	name := strings.ToLower(words[1])
+	cmd, known := commands[name]
+
+	ok, refusal := allowed(b.game, cmd, message.Author.ID, message.GuildID, message.ChannelID)
+	if !ok {
+		if refusal == "" {
+			log.Printf("Ignoring %q: no game registered", name)
+		} else {
+			b.reply(message, refusal)
+		}
 		return
 	}
 
-	switch command {
-	case "ping":
-		b.send(message.ChannelID, "pong")
-	case "register", "start":
-		b.register(message)
-	case "unregister", "end":
-		b.unregister(message)
-	case "sitrep":
-		b.sitrep(message)
-	case "map":
-		if err := b.mapRooms(); err != nil {
-			log.Printf("Could not map rooms: %v", err)
-			b.reply(message, fmt.Sprintf("Could not map the town's channels (%v)", err))
-		}
-	case "village":
-		b.village(message, rawText)
-	case "character":
-		b.character(message, rawText)
-	case "grimoire":
-		b.characterList(message)
-	case "whisper":
-		b.whisper(message)
-	default:
+	if !known {
 		b.send(message.ChannelID, "Huh? WTF is that command?!")
+		return
 	}
+	cmd.run(b, message, words)
 }
 
-// commandAllowed reports whether a command may run, and is checked before every command.
-// With no game registered, only register/start and ping run, from any channel (register's
-// channel becomes the admin channel), and every other command is ignored without a reply.
-// Once a game is registered, every command must come from the Storyteller, in the
-// admin channel of the registered server, except ping, which the Storyteller can send
-// from anywhere; anything else gets a refusal.
-func (b *Bot) commandAllowed(message *discordgo.MessageCreate, command string) bool {
-	if b.game == nil {
-		if command == "register" || command == "start" || command == "ping" {
-			return true
-		}
-		log.Printf("Ignoring %q: no game registered", command)
-		return false
+// allowed decides whether a command may run. With no game registered, only commands
+// marked beforeGame run, for anyone, from anywhere; anything else is ignored, which
+// allowed signals with an empty refusal. Once a game is registered, commands only run
+// for the Storyteller, in the admin channel of the registered server (anyChannel
+// commands skip the server and channel check); anything else gets the refusal text.
+// Unknown commands are checked like any other command, with no flags set.
+func allowed(game *Game, cmd command, authorID, guildID, channelID string) (ok bool, refusal string) {
+	if game == nil {
+		return cmd.beforeGame, ""
 	}
 
-	if command == "ping" && message.Author.ID == b.game.StorytellerID {
-		return true
+	isStoryteller := authorID == game.StorytellerID
+	inAdmin := guildID == game.GuildID && channelID == game.AdminChannelID
+	if isStoryteller && (inAdmin || cmd.anyChannel) {
+		return true, ""
 	}
 
-	if message.GuildID != b.game.GuildID || message.Author.ID != b.game.StorytellerID || message.ChannelID != b.game.AdminChannelID {
-		reply := fmt.Sprintf("Commands only work for the Storyteller (<@%s>), in the admin channel <#%s>. This command will not execute", b.game.StorytellerID, b.game.AdminChannelID)
-		b.reply(message, reply)
-		return false
-	}
+	return false, fmt.Sprintf("Commands only work for the Storyteller (<@%s>), in the admin channel <#%s>. This command will not execute", game.StorytellerID, game.AdminChannelID)
+}
 
-	return true
+// ping lets anyone check the bot is online and reading commands.
+func (b *Bot) ping(message *discordgo.MessageCreate, _ []string) {
+	b.send(message.ChannelID, "pong")
 }
 
 // reply answers a command as a threaded reply in the channel it came from.

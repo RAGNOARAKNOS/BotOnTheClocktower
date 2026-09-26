@@ -2,11 +2,11 @@
 
 [← UML index](README.md)
 
-How a Discord message becomes a command. Covers `newMessage`, `extractCommand` and `commandAllowed` in [internal/bot/commands.go](../../internal/bot/commands.go), and `newMessage` in [internal/bot/bot.go](../../internal/bot/bot.go).
+How a Discord message becomes a command. Covers `newMessage` in [internal/bot/bot.go](../../internal/bot/bot.go), and `extractCommand`, the `commands` table and `allowed` in [internal/bot/commands.go](../../internal/bot/commands.go).
 
 ## Activity: handling a message
 
-discordgo calls `newMessage` in its own goroutine for every message the bot can see. `Bot.mu` lets only one command run at a time. The deferred `recover` means a bug in one command doesn't crash the bot and lose the game in memory. `commandAllowed` checks every command before it runs, so the command handlers make no access checks of their own.
+discordgo calls `newMessage` in its own goroutine for every message the bot can see. `Bot.mu` lets only one command run at a time. The deferred `recover` means a bug in one command doesn't crash the bot and lose the game in memory. Each command's entry in the `commands` table says who may run it and where, and `allowed` checks that before it runs, so the command handlers make no access checks of their own. Aliases, such as `start` for `register`, are extra entries pointing at the same handler.
 
 ```mermaid
 flowchart TD
@@ -17,21 +17,23 @@ flowchart TD
     split --> d2{" "}
     d2 -->|"[fewer than 2 words, or the first isn't !botc]"| ignored
     d2 -->|"[!botc command]"| lock("Lock Bot.mu<br/>Defer recover")
-    lock --> allowed("extractCommand: lower-case the 2nd word,<br/>then commandAllowed")
+    lock --> lookup("extractCommand: look up the lower-cased 2nd word<br/>in the commands table (unknown: no flags)")
+    lookup --> allowed("allowed(game, command, sender, server, channel)")
     allowed --> dok{" "}
-    dok -->|"[not allowed]"| notrun("Don't run the command<br/>(commandAllowed has ignored or refused it)")
+    dok -->|"[not allowed, no refusal]"| ign("Log: Ignoring, no game registered")
+    dok -->|"[not allowed, with a refusal]"| refuse("Reply with the refusal")
     dok -->|"[allowed]"| cmd{"Which command?"}
     cmd -->|"[ping]"| ping("Send pong")
     cmd -->|"[register, start]"| reg("register")
     cmd -->|"[unregister, end]"| unreg("unregister")
     cmd -->|"[sitrep]"| sit("sitrep")
-    cmd -->|"[map]"| maprooms("mapRooms<br/>(reply with the error if it fails)")
+    cmd -->|"[map]"| maprooms("mapCommand: mapRooms<br/>(reply with the error if it fails)")
     cmd -->|"[village]"| vil("village")
     cmd -->|"[character]"| chr("character")
     cmd -->|"[grimoire]"| gri("characterList")
     cmd -->|"[whisper]"| whi("whisper")
     cmd -->|"[anything else]"| wtf("Reply: Huh? WTF is that command?!")
-    notrun & ping & reg & unreg & sit & maprooms & vil & chr & gri & whi & wtf --> merged{" "}
+    ign & refuse & ping & reg & unreg & sit & maprooms & vil & chr & gri & whi & wtf --> merged{" "}
     merged -->|"[the command panicked]"| rec("Log the stack trace<br/>Reply: Something went wrong")
     merged -->|"[no panic]"| unlock("Unlock Bot.mu")
     rec --> unlock
@@ -63,9 +65,10 @@ sequenceDiagram
     else !botc command
         critical Bot.mu held for the whole command
             Bot->>+Handler: extractCommand(message, words)
-            alt no game registered, and not register, start or ping
-                Note over Handler: commandAllowed: ignore, log to the console only
-            else game registered, not the Storyteller in the admin channel, and not the Storyteller's ping
+            Note over Handler: Look up the command, then allowed(...)
+            alt no game registered, and the command isn't marked beforeGame
+                Note over Handler: Ignore, log to the console only
+            else game registered, and not the Storyteller in the admin channel (or anywhere, for anyChannel)
                 Handler->>REST: Reply "Commands only work for the Storyteller..."
             else allowed
                 Handler->>REST: Any Discord calls the command needs
@@ -83,24 +86,27 @@ sequenceDiagram
     end
 ```
 
-## Activity: `commandAllowed`
+## Activity: `allowed`
 
-Checked before every command. With no game registered, only `register` / `start` and `ping` may run, from any channel; `register`'s channel then becomes the admin channel. Once a game is registered, every command must come from the Storyteller, in the admin channel, except `ping`, which the Storyteller can send from anywhere.
+A pure function: it makes no Discord calls, so `commands_test.go` covers every case. It uses two flags from the command's table entry:
+
+- `beforeGame` (`register`, `start`, `ping`): anyone may run it, from any channel, while no game is registered.
+- `anyChannel` (`ping`): the Storyteller may run it outside the admin channel.
+
+`extractCommand` logs an ignored command and replies with a refusal.
 
 ```mermaid
 flowchart TD
     start((" ")):::initial --> d1{" "}
     d1 -->|"[no game registered]"| d2{" "}
-    d2 -->|"[register, start or ping]"| ok("Return true: run the command")
-    d2 -->|"[any other command]"| r1("Log: Ignoring, no game registered<br/>(no reply)")
-    d1 -->|"[game registered]"| dping{" "}
-    dping -->|"[ping from the Storyteller]"| ok
-    dping -->|"[anything else]"| d3{" "}
-    d3 -->|"[another server, not the Storyteller,<br/>or not the admin channel]"| r2("Reply: Commands only work for the Storyteller,<br/>in the admin channel")
-    d3 -->|"[Storyteller, in the admin channel]"| ok
+    d2 -->|"[beforeGame]"| ok("Return true")
+    d2 -->|"[not beforeGame]"| r1("Return false, no refusal<br/>(ignore)")
+    d1 -->|"[game registered]"| d3{" "}
+    d3 -->|"[Storyteller, and in the admin channel<br/>of the registered server, or anyChannel]"| ok
+    d3 -->|"[anyone else, or anywhere else]"| r2("Return false, refusal:<br/>Commands only work for the Storyteller,<br/>in the admin channel")
     r1 --> refused(((" "))):::final
     r2 --> refused
-    ok --> allowed(((" "))):::final
+    ok --> allowedEnd(((" "))):::final
 
     classDef initial fill:#000,stroke:#666
     classDef final fill:#000,stroke:#666
@@ -108,4 +114,4 @@ flowchart TD
 
 ---
 
-Last checked against code: 2026-09-27 (7fc00d0)
+Last checked against code: 2026-09-27 (7fa2732)

@@ -70,7 +70,7 @@ func (b *Bot) character(message *discordgo.MessageCreate, rawText []string) {
 	case "clear":
 		b.characterClear(message)
 	case "list":
-		b.characterList(message)
+		b.characterList(message, nil)
 	case "send":
 		b.characterSend(message)
 	default:
