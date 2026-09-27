@@ -10,7 +10,6 @@ import (
 )
 
 const (
-	gatherUsage = "Usage: `!botc gather` (60 seconds), `!botc gather <minutes>` (1 to 10) or `!botc gather cancel`."
 	// gatherDefault is the countdown when no time is given.
 	gatherDefault = 60 * time.Second
 	// gatherMaxMinutes is the longest countdown the Storyteller can set.
@@ -35,8 +34,7 @@ func (c *gatherCountdown) stop() {
 
 // parseGather reads the words after `gather`: nothing for the default countdown,
 // "cancel", or a whole number of minutes from 1 to gatherMaxMinutes.
-func parseGather(words []string) (d time.Duration, cancel bool, err error) {
-	args := words[2:]
+func parseGather(args []string) (d time.Duration, cancel bool, err error) {
 	switch {
 	case len(args) == 0:
 		return gatherDefault, false, nil
@@ -66,19 +64,11 @@ func formatCountdown(d time.Duration) string {
 	return out
 }
 
-// plural writes a count and a unit, adding "s" unless the count is 1.
-func plural(n int, unit string) string {
-	if n == 1 {
-		return "1 " + unit
-	}
-	return fmt.Sprintf("%d %ss", n, unit)
-}
-
 // gather starts a countdown to move the players to Town Square, or cancels one.
 func (b *Bot) gather(req *request) {
-	d, cancel, err := parseGather(req.words)
+	d, cancel, err := parseGather(req.args)
 	if err != nil {
-		req.reply(fmt.Sprintf("Could not read that (%v). %s", err, gatherUsage))
+		req.reply(fmt.Sprintf("Could not read that (%v). %s", err, req.usage))
 		return
 	}
 	if cancel {
@@ -148,7 +138,7 @@ func (b *Bot) gatherMove() {
 		if id == game.StorytellerID {
 			continue
 		}
-		name := game.Players[id]
+		name := game.Players[id].Name
 		state, err := b.discord.State.VoiceState(game.GuildID, id)
 		switch {
 		case err != nil || state.ChannelID == "":
@@ -182,16 +172,8 @@ func (b *Bot) gatherAnnounce(text string) (failures []string) {
 	for _, id := range b.game.sortedPlayerIDs() {
 		if err := b.sendDM(id, b.dmEmbed("Gathering in Town Square", text)); err != nil {
 			log.Printf("Could not DM the gathering announcement to %s: %v", id, err)
-			failures = append(failures, fmt.Sprintf("could not DM %s (%s)", b.game.Players[id], dmErrorReason(err)))
+			failures = append(failures, fmt.Sprintf("could not DM %s (%s)", b.game.Players[id].Name, dmErrorReason(err)))
 		}
 	}
 	return failures
-}
-
-// failureList formats failures as a warning to append to a reply, or "" if there are none.
-func failureList(failures []string) string {
-	if len(failures) == 0 {
-		return ""
-	}
-	return "\nWarning:\n- " + strings.Join(failures, "\n- ")
 }

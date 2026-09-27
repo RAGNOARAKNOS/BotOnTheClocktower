@@ -2,43 +2,64 @@ package bot
 
 import (
 	"maps"
+	"regexp"
 	"slices"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/bwmarrin/discordgo"
 )
 
-// TestSlashParity checks every `!botc` command and subcommand has a `/botc` one, and the other way round.
-func TestSlashParity(t *testing.T) {
-	var textNames []string
-	for name, cmd := range commands {
-		if !cmd.alias {
-			textNames = append(textNames, name)
-		}
-	}
-	slashNames := make(map[string]*discordgo.ApplicationCommandOption)
-	for _, o := range slashCommands()[0].Options {
-		slashNames[o.Name] = o
-	}
-	if got, want := slices.Sorted(maps.Keys(slashNames)), slices.Sorted(slices.Values(textNames)); !slices.Equal(got, want) {
-		t.Errorf("/botc subcommands = %v, want the commands table's %v", got, want)
+// discordName is what Discord accepts as a command or option name.
+var discordName = regexp.MustCompile(`^[-_a-z0-9]{1,32}$`)
+
+// TestSlashDefinition checks the /botc definition keeps to Discord's rules. Discord
+// refuses a bad definition when the bot registers it, which is only logged
+// (registerSlashCommands), so /botc would silently stay out of date.
+func TestSlashDefinition(t *testing.T) {
+	defs := slashCommands()
+	if len(defs) != 1 || defs[0].Name != slashCommandName {
+		t.Fatalf("want one command, /%s", slashCommandName)
 	}
 
-	groups := map[string]map[string]func(*Bot, *request){"village": villageCommands, "character": characterCommands}
-	for name, subcommands := range groups {
-		group := slashNames[name]
-		if group == nil || group.Type != discordgo.ApplicationCommandOptionSubCommandGroup {
-			t.Errorf("/botc %s is not a subcommand group", name)
-			continue
+	var check func(path string, options []*discordgo.ApplicationCommandOption)
+	check = func(path string, options []*discordgo.ApplicationCommandOption) {
+		if len(options) > 25 {
+			t.Errorf("%s: %d options or subcommands, Discord allows 25", path, len(options))
 		}
-		var got []string
-		for _, o := range group.Options {
-			got = append(got, o.Name)
-		}
-		if want := slices.Sorted(maps.Keys(subcommands)); !slices.Equal(slices.Sorted(slices.Values(got)), want) {
-			t.Errorf("/botc %s subcommands = %v, want %v", name, got, want)
+		optional := false
+		for _, o := range options {
+			p := path + " " + o.Name
+			if !discordName.MatchString(o.Name) {
+				t.Errorf("%s: name must be 1 to 32 lower-case letters, digits, - or _", p)
+			}
+			if n := utf8.RuneCountInString(o.Description); n < 1 || n > 100 {
+				t.Errorf("%s: description is %d characters, Discord allows 1 to 100", p, n)
+			}
+			if o.Type == discordgo.ApplicationCommandOptionSubCommand || o.Type == discordgo.ApplicationCommandOptionSubCommandGroup {
+				check(p, o.Options)
+				continue
+			}
+			if o.Required && optional {
+				t.Errorf("%s: a required option must come before the optional ones", p)
+			}
+			optional = optional || !o.Required
 		}
 	}
+	check("/"+slashCommandName, defs[0].Options)
+}
+
+// TestSlashOptionsRead checks every /botc option is one slashWords (or a form) reads,
+// so an option added to the commands table can't be silently ignored.
+func TestSlashOptionsRead(t *testing.T) {
+	read := []string{"player", "players", "team", "minutes", "cancel", "character"}
+	eachCommand(func(path string, c command) {
+		for _, o := range c.options {
+			if !slices.Contains(read, o.Name) {
+				t.Errorf("/botc %s option %q: add a case for it to slashWords, then add it to this test", path, o.Name)
+			}
+		}
+	})
 }
 
 func option(name string, kind discordgo.ApplicationCommandOptionType, value any, options ...*discordgo.ApplicationCommandInteractionDataOption) *discordgo.ApplicationCommandInteractionDataOption {

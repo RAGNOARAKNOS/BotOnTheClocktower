@@ -9,9 +9,8 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-// The /botc command mirrors the commands table: each command is a subcommand, and
-// village and character are subcommand groups mirroring villageCommands and
-// characterCommands. TestSlashParity keeps them in step.
+// The /botc command is built from the commands table: each command is a subcommand,
+// and each group (village, character) is a subcommand group.
 
 const (
 	slashCommandName = "botc"
@@ -38,6 +37,24 @@ func teamOption(required bool) *discordgo.ApplicationCommandOption {
 	return o
 }
 
+func minutesOption() *discordgo.ApplicationCommandOption {
+	minMinutes := float64(1)
+	o := slashOption(discordgo.ApplicationCommandOptionInteger, "minutes", "Minutes until the move (default 60 seconds)", false)
+	o.MinValue, o.MaxValue = &minMinutes, gatherMaxMinutes
+	return o
+}
+
+func cancelOption() *discordgo.ApplicationCommandOption {
+	return slashOption(discordgo.ApplicationCommandOptionBoolean, "cancel", "Cancel the running countdown", false)
+}
+
+// characterOption is the character's name, which only fills in the form's box.
+func characterOption() *discordgo.ApplicationCommandOption {
+	o := slashOption(discordgo.ApplicationCommandOptionString, "character", "The character's name (you can change it in the form)", false)
+	o.MaxLength = maxCharacterName
+	return o
+}
+
 func subcommand(name, description string, options ...*discordgo.ApplicationCommandOption) *discordgo.ApplicationCommandOption {
 	return &discordgo.ApplicationCommandOption{Type: discordgo.ApplicationCommandOptionSubCommand, Name: name, Description: description, Options: options}
 }
@@ -46,47 +63,27 @@ func subcommandGroup(name, description string, subcommands ...*discordgo.Applica
 	return &discordgo.ApplicationCommandOption{Type: discordgo.ApplicationCommandOptionSubCommandGroup, Name: name, Description: description, Options: subcommands}
 }
 
-// slashCommands returns the /botc command definition.
+// slashCommands returns the /botc command definition, built from the commands table.
 func slashCommands() []*discordgo.ApplicationCommand {
-	minMinutes := float64(1)
-	minutes := slashOption(discordgo.ApplicationCommandOptionInteger, "minutes", "Minutes until the move (default 60 seconds)", false)
-	minutes.MinValue, minutes.MaxValue = &minMinutes, gatherMaxMinutes
-
-	character := slashOption(discordgo.ApplicationCommandOptionString, "character", "The character's name (you can change it in the form)", false)
-	character.MaxLength = maxCharacterName
-
 	return []*discordgo.ApplicationCommand{{
 		Name:        slashCommandName,
 		Description: "Blood on the Clocktower: Storyteller commands",
 		Contexts:    &[]discordgo.InteractionContextType{discordgo.InteractionContextGuild},
-		Options: []*discordgo.ApplicationCommandOption{
-			subcommand("ping", "Check the bot is online"),
-			subcommand("register", "Start a game: you become the Storyteller and this becomes the admin channel"),
-			subcommand("unregister", "End the game and remove the game roles"),
-			subcommand("sitrep", "Report the game's server, channels and Storyteller"),
-			subcommand("map", "Find the village's voice channels"),
-			subcommand("grimoire", "Show every player's character"),
-			subcommand("whisper", "DM a player a secret message (opens a form)", playerOption()),
-			subcommand("gather", "Count down, then move the players to Town Square",
-				minutes,
-				slashOption(discordgo.ApplicationCommandOptionBoolean, "cancel", "Cancel the running countdown", false)),
-			subcommandGroup("village", "Manage the village's players",
-				subcommand("create", "Make everyone in Town Square the village"),
-				subcommand("add", "Add players to the village", playersOption(true)),
-				subcommand("remove", "Remove players from the village", playersOption(true)),
-				subcommand("list", "List the village's players")),
-			subcommandGroup("character", "Manage the players' characters",
-				subcommand("assign", "Give a player a character (opens a form for guidance)", playerOption(), teamOption(false), character),
-				subcommand("team", "Move characters to another team", playersOption(true), teamOption(true)),
-				subcommand("kill", "Mark players dead", playersOption(true)),
-				subcommand("revive", "Mark players alive", playersOption(true)),
-				subcommand("ghostvote", "Switch dead players' ghost votes", playersOption(true)),
-				subcommand("announce", "Announce deaths and revivals in Town Square"),
-				subcommand("clear", "Remove players' characters", playersOption(true)),
-				subcommand("list", "Show every player's character"),
-				subcommand("send", "DM unsent characters, or resend to the players given", playersOption(false))),
-		},
+		Options:     slashSubcommands(commands),
 	}}
+}
+
+// slashSubcommands turns commands into /botc subcommands, and groups into subcommand groups.
+func slashSubcommands(cmds []command) []*discordgo.ApplicationCommandOption {
+	options := make([]*discordgo.ApplicationCommandOption, 0, len(cmds))
+	for _, c := range cmds {
+		if len(c.subcommands) > 0 {
+			options = append(options, subcommandGroup(c.name, c.description, slashSubcommands(c.subcommands)...))
+		} else {
+			options = append(options, subcommand(c.name, c.description, c.options...))
+		}
+	}
+	return options
 }
 
 // slashOptions returns a /botc command's path ("/botc", subcommand group if any,
@@ -153,6 +150,17 @@ func mentionIDsIn(text string) []string {
 // Forms. The CustomID carries what the form is for: "botc|whisper|<user ID>" or
 // "botc|assign|<user ID>|<team or empty>".
 
+// formOpener builds the form a /botc command answers with, for the player it names,
+// from the command's options.
+type formOpener func(userID, playerName string, options map[string]*discordgo.ApplicationCommandInteractionDataOption) *discordgo.InteractionResponseData
+
+// opensForm reports whether the /botc command with this path (see slashOptions)
+// answers with a form rather than running straight away.
+func opensForm(path []string) bool {
+	cmd, _, _ := resolve(path[1:])
+	return cmd.form != nil
+}
+
 // Text box IDs in the forms.
 const (
 	fieldText      = "text"
@@ -161,7 +169,7 @@ const (
 )
 
 // whisperModal is the form `/botc whisper` opens.
-func whisperModal(userID, playerName string) *discordgo.InteractionResponseData {
+func whisperModal(userID, playerName string, _ map[string]*discordgo.ApplicationCommandInteractionDataOption) *discordgo.InteractionResponseData {
 	return &discordgo.InteractionResponseData{
 		CustomID: modalPrefix + "whisper|" + userID,
 		Title:    truncate("Whisper to "+playerName, 45),
@@ -171,10 +179,12 @@ func whisperModal(userID, playerName string) *discordgo.InteractionResponseData 
 	}
 }
 
-// assignModal is the form `/botc character assign` opens, with the name filled in.
-func assignModal(userID, playerName, team, name string) *discordgo.InteractionResponseData {
+// assignModal is the form `/botc character assign` opens, with the character's
+// name filled in. The team option is carried in the CustomID.
+func assignModal(userID, playerName string, options map[string]*discordgo.ApplicationCommandInteractionDataOption) *discordgo.InteractionResponseData {
+	name := stringOption(options, "character")
 	return &discordgo.InteractionResponseData{
-		CustomID: modalPrefix + "assign|" + userID + "|" + team,
+		CustomID: modalPrefix + "assign|" + userID + "|" + stringOption(options, "team"),
 		Title:    truncate("Character for "+playerName, 45),
 		Components: []discordgo.MessageComponent{
 			discordgo.ActionsRow{Components: []discordgo.MessageComponent{

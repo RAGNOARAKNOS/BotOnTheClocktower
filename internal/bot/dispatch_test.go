@@ -1,49 +1,12 @@
 package bot
 
 import (
-	"io"
-	"net/http"
 	"strings"
-	"sync"
 	"testing"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
-
-// fakeDiscord records the REST requests the bot makes and answers each with an empty message.
-type fakeDiscord struct {
-	mu       sync.Mutex
-	requests []string // "METHOD path body"
-}
-
-func (f *fakeDiscord) RoundTrip(r *http.Request) (*http.Response, error) {
-	body := ""
-	if r.Body != nil {
-		b, _ := io.ReadAll(r.Body)
-		body = string(b)
-	}
-	f.mu.Lock()
-	f.requests = append(f.requests, r.Method+" "+r.URL.Path+" "+body)
-	f.mu.Unlock()
-	return &http.Response{
-		StatusCode: http.StatusOK,
-		Header:     http.Header{"Content-Type": []string{"application/json"}},
-		Body:       io.NopCloser(strings.NewReader(`{"id":"1","channel_id":"c"}`)),
-		Request:    r,
-	}, nil
-}
-
-// testBot returns a Bot whose Discord session talks to a fakeDiscord.
-func testBot(t *testing.T) (*Bot, *fakeDiscord) {
-	t.Helper()
-	session, err := discordgo.New("Bot test-token")
-	if err != nil {
-		t.Fatal(err)
-	}
-	fake := &fakeDiscord{}
-	session.Client = &http.Client{Transport: fake}
-	return &Bot{discord: session}, fake
-}
 
 func messageFrom(author, guild, channel, content string) *discordgo.MessageCreate {
 	return &discordgo.MessageCreate{Message: &discordgo.Message{
@@ -74,6 +37,67 @@ func TestPingResponds(t *testing.T) {
 				}
 			}
 			t.Errorf("no pong sent; requests: %q", fake.requests)
+		})
+	}
+}
+
+func TestUsageReplies(t *testing.T) {
+	h := newHarness(t)
+	h.withGame(nil)
+	for _, content := range []string{"!botc village", "!botc village dance", "!botc character", "!botc CHARACTER Dance"} {
+		wantReply(t, h.runOne(content), "Usage: ")
+	}
+	if got := h.runOne("!botc village LIST"); !strings.Contains(got, "The village is empty") {
+		t.Errorf("subcommand names should ignore capitals; got %q", got)
+	}
+}
+
+// slashInteraction builds a /botc command from author in the admin channel.
+func slashInteraction(author string, options ...*discordgo.ApplicationCommandInteractionDataOption) *discordgo.InteractionCreate {
+	return &discordgo.InteractionCreate{Interaction: &discordgo.Interaction{
+		ID: "interaction", Token: "token", AppID: "app", Type: discordgo.InteractionApplicationCommand,
+		GuildID: testGuild, ChannelID: testAdmin,
+		Member: &discordgo.Member{User: &discordgo.User{ID: author}},
+		Data:   discordgo.ApplicationCommandInteractionData{Name: slashCommandName, Options: options},
+	}}
+}
+
+// TestSlashAcknowledgedWhileLocked checks a slash command is acknowledged at once,
+// even while another command holds Bot.mu, and a form isn't.
+func TestSlashAcknowledgedWhileLocked(t *testing.T) {
+	const deferred, modal = `"type":5`, `"type":9`
+	sub := discordgo.ApplicationCommandOptionSubCommand
+	tests := []struct {
+		name      string
+		options   []*discordgo.ApplicationCommandInteractionDataOption
+		wantEarly bool   // acknowledged while Bot.mu is held
+		wantFirst string // the first response's type
+	}{
+		{"command", []*discordgo.ApplicationCommandInteractionDataOption{option("ping", sub, nil)}, true, deferred},
+		{"form", []*discordgo.ApplicationCommandInteractionDataOption{option("whisper", sub, nil,
+			option("player", discordgo.ApplicationCommandOptionUser, "1"))}, false, modal},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newHarness(t)
+			h.withGame(map[string]string{"1": "Alice"})
+
+			h.b.mu.Lock()
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				h.b.interaction(h.b.discord, slashInteraction(testStoryteller, tt.options...))
+			}()
+			early := h.fake.waitFor(200*time.Millisecond, "/callback")
+			h.b.mu.Unlock()
+			<-done
+
+			if early != tt.wantEarly {
+				t.Errorf("answered while Bot.mu was held: %v, want %v", early, tt.wantEarly)
+			}
+			if !h.fake.sent("/callback", tt.wantFirst) {
+				t.Errorf("no response of %s; requests: %q", tt.wantFirst, h.fake.requests)
+			}
 		})
 	}
 }

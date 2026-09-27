@@ -2,16 +2,16 @@
 
 [← UML index](README.md)
 
-The village is the list of players in the game (`Game.Players`, user ID → display name). Players in the village have the `BoTC-Player` role. Covers `village`, `villageCreate`, `villageAdd`, `villageRemove`, `setPlayerRole` and `lookupMember` in [internal/bot/village.go](../../internal/bot/village.go), [internal/bot/roles.go](../../internal/bot/roles.go) and [internal/bot/discord.go](../../internal/bot/discord.go). Spec: [village-management.md](../specs/village-management.md).
+The village is the list of players in the game (`Game.Players`, user ID → `*Player`, which holds the display name, life state and character). Players in the village have the `BoTC-Player` role. Covers `villageCreate`, `villageAdd`, `villageRemove`, `setPlayerRole` and `lookupMember` in [internal/bot/village.go](../../internal/bot/village.go), [internal/bot/roles.go](../../internal/bot/roles.go) and [internal/bot/discord.go](../../internal/bot/discord.go). Spec: [village-management.md](../specs/village-management.md).
 
-## Activity: `village` dispatch
+## Activity: choosing a `village` subcommand
 
-Like every command, `village` only runs for the Storyteller in the admin channel; [`allowed`](command-dispatch.md#activity-allowed) checks that before `village` is called. `dispatch` looks the subcommand up in the `villageCommands` table (`character` does the same with `characterCommands`).
+`village` is a group in the `commands` table, so `runCommand` [resolves](command-dispatch.md#activity-handling-a-message) the next word to one of its subcommands (`character` works the same way). Like every command, each subcommand only runs for the Storyteller in the admin channel; [`allowed`](command-dispatch.md#activity-allowed) checks that first.
 
 ```mermaid
 flowchart TD
     start((" ")):::initial --> d2{" "}
-    d2 -->|"[no subcommand, or not one below]"| usage("Reply with the village usage")
+    d2 -->|"[no subcommand, or not one below]"| usage("Reply with the village usage:<br/>each subcommand's")
     d2 -->|"[create]"| create("villageCreate")
     d2 -->|"[add]"| add("villageAdd")
     d2 -->|"[remove]"| remove("villageRemove")
@@ -38,7 +38,7 @@ flowchart TD
     dbot -->|"[bot]"| next
     dbot -->|"[person, or couldn't be looked up]"| keep("Add to the new list, with their display name<br/>(or user ID if not found)")
     keep --> next
-    next -->|"[all checked]"| replace("Game.ReplacePlayers: Players = the new list,<br/>dropped = old players not in it,<br/>delete the dropped players' characters")
+    next -->|"[all checked]"| replace("Game.ReplacePlayers: remove old players not in<br/>the new list, with their characters (dropped),<br/>add newcomers alive, and keep everyone<br/>else's character and life, with their new name")
     replace --> role("setPlayerRole: give BoTC-Player to the new list,<br/>take it from the dropped players")
     role --> reply("Reply: Village created with N player(s)<br/>(or: it is empty), who was dropped,<br/>and a warning if the role couldn't be fully updated")
     fail --> done(((" "))):::final
@@ -71,7 +71,7 @@ sequenceDiagram
             end
         end
     end
-    Note over Bot: Skip bots. Game.ReplacePlayers: Players = new list,<br/>return who was dropped and delete their Characters
+    Note over Bot: Skip bots. Game.ReplacePlayers: the village = new list,<br/>return who was dropped (their characters go with them)
     opt anyone to give or take the role from
         Bot->>REST: GuildRoles(guild), in findRoleID(BoTC-Player)
         REST-->>Bot: Roles
@@ -132,4 +132,4 @@ flowchart TD
 
 ---
 
-Last checked against code: 2026-09-27 (f7831d7)
+Last checked against code: 2026-09-27 (85bccfb)

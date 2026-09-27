@@ -73,6 +73,6 @@ Subcommands:
 - `village`, `villageCreate`, `villageAdd`, `villageRemove`, `villageList` in [internal/bot/village.go](../../internal/bot/village.go).
 - Access is checked before any command runs, by `allowed` (see [command-handling.md](command-handling.md)).
 - Helpers: `setPlayerRole` (looks the role up once, keeps going past failures), `replyWithRoleWarning`, `lookupMember` (voice state → state cache → Discord API), `memberDisplayName`, `sortedNames`.
-- Players are stored in `Game.Players` (user ID → display name).
+- Players are stored in `Game.Players` (user ID → `*Player`: display name, life state and character). Players who stay in the village through `create` keep their character and life state.
 - `create` gives `BoTC-Player` to everyone in the new list, not just newcomers, so running it again fixes any earlier role failure.
 - The old `mapPlayers` (console only) has been removed.

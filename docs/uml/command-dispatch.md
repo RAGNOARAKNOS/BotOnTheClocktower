@@ -2,13 +2,15 @@
 
 [← UML index](README.md)
 
-How a `!botc` message or a `/botc` slash command becomes a command. Covers `newMessage`, `locked` and `messageRequest` in [internal/bot/bot.go](../../internal/bot/bot.go); `runCommand`, `dispatch`, the `commands` table and `allowed` in [internal/bot/commands.go](../../internal/bot/commands.go); and `interaction`, `slashCommand`, `modalSubmit`, `runSlash` and `slashResponder` in [internal/bot/interactions.go](../../internal/bot/interactions.go), with `slashWords` and `modalCommand` in [internal/bot/slash.go](../../internal/bot/slash.go).
+How a `!botc` message or a `/botc` slash command becomes a command. Covers `newMessage`, `locked` and `messageRequest` in [internal/bot/bot.go](../../internal/bot/bot.go); `runCommand`, `resolve`, `findCommand`, `command.help` and `allowed` in [internal/bot/commands.go](../../internal/bot/commands.go), with the `commands` table in [internal/bot/commandtable.go](../../internal/bot/commandtable.go); and `interaction`, `slashCommand`, `modalSubmit`, `runSlash` and `slashResponder` in [internal/bot/interactions.go](../../internal/bot/interactions.go), with `slashWords` and `modalCommand` in [internal/bot/slash.go](../../internal/bot/slash.go).
 
 Both forms build a `request` (the sender, server, channel, command words, raw text, mentioned users, and how to reply) and run the same handler through `runCommand`, so handlers never know which form a command came from.
 
 ## Activity: handling a message
 
-discordgo calls `newMessage` in its own goroutine for every message the bot can see. It runs the command through `locked`, which holds `Bot.mu` so only one command runs at a time, and defers a `recover` so a bug in one command doesn't crash the bot and lose the game in memory. Each command's entry in the `commands` table says who may run it and where, and `allowed` checks that before it runs, so the command handlers make no access checks of their own. Aliases, such as `start` for `register`, are extra entries pointing at the same handler.
+discordgo calls `newMessage` in its own goroutine for every message the bot can see. It runs the command through `locked`, which holds `Bot.mu` so only one command runs at a time, and defers a `recover` so a bug in one command doesn't crash the bot and lose the game in memory.
+
+Every command is one entry in the `commands` table ([internal/bot/commandtable.go](../../internal/bot/commandtable.go)): its name and aliases, its handler, who may run it, its usage, and its `/botc` description and options. A group, such as `village` or `character`, holds its subcommands instead of a handler. `resolve` follows the words through the table (a name or alias, then a subcommand's name, ignoring capitals), and `allowed` checks the entry it reaches before the handler runs, so the handlers make no access checks of their own.
 
 ```mermaid
 flowchart TD
@@ -20,24 +22,17 @@ flowchart TD
     d2 -->|"[fewer than 2 words, or the first isn't !botc]"| ignored
     d2 -->|"[!botc command]"| lock("locked: lock Bot.mu<br/>Defer recover")
     lock --> build("messageRequest: build a request<br/>(replies threaded to the message)")
-    build --> lookup("runCommand: look up the lower-cased 2nd word<br/>in the commands table (unknown: no flags)")
+    build --> lookup("runCommand: resolve the words through the<br/>commands table (unknown: no flags)")
     lookup --> allowed("allowed(game, command, sender, server, channel)")
     allowed --> dok{" "}
     dok -->|"[not allowed, no refusal]"| ign("Log: Ignoring, no game registered")
     dok -->|"[not allowed, with a refusal]"| refuse("Reply with the refusal")
-    dok -->|"[allowed]"| cmd{"Which command?"}
-    cmd -->|"[ping]"| ping("Send pong")
-    cmd -->|"[register, start]"| reg("register")
-    cmd -->|"[unregister, end]"| unreg("unregister")
-    cmd -->|"[sitrep]"| sit("sitrep")
-    cmd -->|"[map]"| maprooms("mapCommand: mapRooms<br/>(reply with the error if it fails)")
-    cmd -->|"[village]"| vil("village")
-    cmd -->|"[character]"| chr("character")
-    cmd -->|"[grimoire]"| gri("characterList")
-    cmd -->|"[whisper]"| whi("whisper")
-    cmd -->|"[gather]"| gat("gather")
-    cmd -->|"[anything else]"| wtf("Reply: Huh? WTF is that command?!")
-    ign & refuse & ping & reg & unreg & sit & maprooms & vil & chr & gri & whi & gat & wtf --> merged{" "}
+    dok -->|"[allowed]"| cmd{" "}
+    cmd -->|"[unknown command]"| wtf("Reply: Huh? WTF is that command?!")
+    cmd -->|"[group, with no subcommand it knows]"| usage("Reply with the group's usage:<br/>each subcommand's")
+    cmd -->|"[command]"| args("req.args = the words after its name,<br/>req.usage = its usage")
+    args --> run("Run its handler: see the diagram<br/>for each command")
+    ign & refuse & wtf & usage & run --> merged{" "}
     merged -->|"[the command panicked]"| rec("Log the stack trace<br/>Reply: Something went wrong")
     merged -->|"[no panic]"| unlock("Unlock Bot.mu")
     rec --> unlock
@@ -93,24 +88,28 @@ sequenceDiagram
 
 ## Activity: handling a slash command
 
-discordgo calls `interaction` for every interaction. Discord needs an answer within 3 seconds and every answer is ephemeral, which `slashResponder` handles: `acknowledge` shows "thinking…", and each `reply` fills it in or adds a follow-up. `whisper` and `character assign` answer with a form instead, which must be the first response, so they check `allowed` themselves before opening it. The submitted form comes back as a second interaction (see the form sequence below).
+discordgo calls `interaction` for every interaction. Discord needs an answer within 3 seconds and every answer is ephemeral, which `slashResponder` handles: `acknowledge` shows "thinking…", and each `reply` fills it in or adds a follow-up. Another command can hold `Bot.mu` for longer than 3 seconds while it talks to Discord, so `interaction` acknowledges before waiting for the lock. `whisper` and `character assign`, whose table entries have a `form` (`opensForm`), answer with a form instead, which must be the first response, so they aren't acknowledged early: under the lock they check `allowed` themselves before opening it. The submitted form comes back as a second interaction (see the form sequence below).
 
 ```mermaid
 flowchart TD
     start((" ")):::initial --> d1{" "}
     d1 -->|"[not in a server, not /botc, or not one of the bot's forms]"| ignored(((" "))):::final
-    d1 -->|"[/botc command or bot form]"| lock("locked: lock Bot.mu<br/>Defer recover")
+    d1 -->|"[/botc command or bot form]"| early{" "}
+    early -->|"[opensForm: whisper or character assign]"| lock("locked: lock Bot.mu<br/>Defer recover")
+    early -->|"[any other command, or a submitted form]"| ack("acknowledge: thinking…<br/>before waiting for Bot.mu")
+    ack --> dack{" "}
+    dack -->|"[Discord couldn't be told]"| ignored
+    dack -->|"[acknowledged]"| lock
     lock --> kind{" "}
     kind -->|"[slash command]"| words("slashWords: options to words<br/>and mentioned user IDs")
     words --> form{" "}
-    form -->|"[whisper or character assign]"| fok{" "}
+    form -->|"[its table entry has a form:<br/>whisper, character assign]"| fok{" "}
     fok -->|"[not allowed]"| frefuse("Reply: the refusal,<br/>or No game registered")
     fok -->|"[player not in the village]"| fnot("Reply: isn't in the village")
     fok -->|"[allowed]"| open("Open the form<br/>(whisperModal or assignModal)")
-    form -->|"[any other command]"| ack("acknowledge: thinking…")
+    form -->|"[any other command]"| resolve("resolveUsers: mentioned IDs to users")
     kind -->|"[form submitted]"| mc("modalCommand: form to words<br/>and raw text for parse.go")
-    mc --> ack
-    ack --> resolve("resolveUsers: mentioned IDs to users")
+    mc --> resolve
     resolve --> ext("runCommand(request):<br/>allowed, then the handler")
     ext --> d3{" "}
     d3 -->|"[ignored: no game registered]"| nogame("Reply: No game registered")
@@ -142,10 +141,10 @@ sequenceDiagram
 
     ST->>Gateway: /botc village add players:@Alice @Bob
     Gateway-)Bot: InteractionCreate, in its own goroutine
+    Bot->>REST: InteractionRespond(deferred, ephemeral), before waiting for Bot.mu
+    REST-->>ST: thinking… (only the Storyteller sees it)
     critical Bot.mu held for the whole command
         Note over Bot: slashWords: /botc village add, mentions Alice and Bob
-        Bot->>REST: InteractionRespond(deferred, ephemeral)
-        REST-->>ST: thinking… (only the Storyteller sees it)
         Bot->>+Handler: runCommand(request)
         Handler->>REST: Any Discord calls the command needs
         Handler->>REST: InteractionResponseEdit(reply)
@@ -178,9 +177,9 @@ sequenceDiagram
     end
     REST-->>ST: Form with a message box
     ST->>Bot: Submits the form (a new interaction)
+    Bot->>REST: InteractionRespond(deferred, ephemeral), before waiting for Bot.mu
     critical Bot.mu
         Note over Bot: modalCommand: words /botc whisper,<br/>text is Alice's mention then the message
-        Bot->>REST: InteractionRespond(deferred, ephemeral)
         Bot->>+Handler: runCommand(request), which checks allowed again
         Handler->>REST: DM Alice the message
         REST-->>Player: DM
@@ -217,4 +216,4 @@ flowchart TD
 
 ---
 
-Last checked against code: 2026-09-27 (f7831d7)
+Last checked against code: 2026-09-27 (85bccfb)

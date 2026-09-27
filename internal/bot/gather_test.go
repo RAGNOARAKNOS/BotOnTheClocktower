@@ -26,8 +26,7 @@ func TestParseGather(t *testing.T) {
 		{"5 minutes", 0, false, true},
 	}
 	for _, tt := range tests {
-		words := append([]string{"!botc", "gather"}, strings.Fields(tt.args)...)
-		got, cancel, err := parseGather(words)
+		got, cancel, err := parseGather(strings.Fields(tt.args))
 		if (err != nil) != tt.wantErr {
 			t.Errorf("parseGather(%q) error = %v, want error %v", tt.args, err, tt.wantErr)
 			continue
@@ -55,4 +54,27 @@ func TestFormatCountdown(t *testing.T) {
 			t.Errorf("formatCountdown(%v) = %q, want %q", tt.d, got, tt.want)
 		}
 	}
+}
+
+func TestGatherCountdown(t *testing.T) {
+	h := newHarness(t)
+	h.withGame(map[string]string{"1": "Alice"})
+
+	wantReply(t, h.runOne("!botc gather cancel"), "No gathering is counting down.")
+	wantReply(t, h.runOne("!botc gather 11"), "isn't a whole number of minutes from 1 to 10", "Usage: ")
+
+	wantReply(t, h.runOne("!botc gather 2"), "Gathering the players in Town Square in 2 minutes.", "Only Town Square was told")
+	if !h.fake.sent("POST /api/v9/channels/town/messages", "in 2 minutes", `"tts":true`) {
+		t.Error("Town Square wasn't told by TTS")
+	}
+	if !h.fake.sent("POST /api/v9/users/@me/channels", `"recipient_id":"1"`) {
+		t.Error("Alice wasn't told by DM")
+	}
+	wantReply(t, h.runOne("!botc gather"), "A gathering is already counting down")
+
+	wantReply(t, h.runOne("!botc gather cancel"), "Gathering cancelled.")
+	if !h.fake.sent("POST /api/v9/channels/town/messages", "called off") {
+		t.Error("Town Square wasn't told the gathering is off")
+	}
+	wantReply(t, h.runOne("!botc gather cancel"), "No gathering is counting down.")
 }

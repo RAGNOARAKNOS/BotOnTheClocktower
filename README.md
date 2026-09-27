@@ -215,10 +215,10 @@ Commands only work from the admin channel, and only for the Storyteller:
 | `!botc village list` | Lists the village's players. |
 | `!botc character assign @player [good\|evil] <Character>` | Stores a village player's character and team (Good if left out). Any lines after the first (Shift+Enter) are guidance, kept exactly as typed. Nothing is sent yet. |
 | `!botc character team @player good\|evil` | Moves a character to the other team and marks it unsent, so `send` tells the player. |
-| `!botc character kill @player...` / `revive @player...` | Marks players Dead or Alive. Nothing is posted publicly until `announce`. Reviving gives back the ghost vote. |
+| `!botc character kill @player...` / `!botc character revive @player...` | Marks players Dead or Alive. Nothing is posted publicly until `announce`. Reviving gives back the ghost vote. |
 | `!botc character ghostvote @player...` | Switches a dead player's ghost vote between used and available. |
 | `!botc character announce` | Posts the deaths and revivals since the last announcement in Town Square's text chat. |
-| `!botc character clear @player...` | Removes the stored characters. |
+| `!botc character clear @player...` | Removes the stored characters. The players stay in the village, and a dead player stays dead. |
 | `!botc character list` or `!botc grimoire` | Shows the grimoire: each village player's character, team, Alive/Dead, ghost vote, whether it has been sent and any unannounced change, with totals. |
 | `!botc character send [@player...]` | DMs every unsent character to its player, or resends to the mentioned players. Reports failures and players with no character. |
 | `!botc whisper @player <text>` | DMs a village player a secret message straight away. The text can span several lines. |
@@ -378,6 +378,6 @@ Keeping them current:
 
 ### Anatomy of a command
 
-Messages are split into words with [`strings.Fields`](https://pkg.go.dev/strings#Fields). If the first word is `!botc` (ignoring case) and there is at least one more word, the second word is the command name, dispatched in `runCommand` in [internal/bot/commands.go](internal/bot/commands.go). Any further words are available as arguments. Handlers receive a `request`, which `newMessage` builds from a message and `interaction` builds from a `/botc` slash command ([internal/bot/interactions.go](internal/bot/interactions.go)), turning its options into the same words. [command-dispatch.md](docs/uml/command-dispatch.md) shows the whole flow.
+Messages are split into words with [`strings.Fields`](https://pkg.go.dev/strings#Fields). If the first word is `!botc` (ignoring case) and there is at least one more word, the second word is the command name, dispatched in `runCommand` in [internal/bot/commands.go](internal/bot/commands.go). Every command is declared once, in the `commands` table in [internal/bot/commandtable.go](internal/bot/commandtable.go): its name and aliases, handler, access, usage and `/botc` options. A group such as `village` holds its subcommands, named by the third word. Any further words are the handler's arguments (`req.args`). Handlers receive a `request`, which `newMessage` builds from a message and `interaction` builds from a `/botc` slash command ([internal/bot/interactions.go](internal/bot/interactions.go)), turning its options into the same words. [command-dispatch.md](docs/uml/command-dispatch.md) shows the whole flow.
 
 <https://www.educative.io/answers/how-to-split-a-string-in-golang>

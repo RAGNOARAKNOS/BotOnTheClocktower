@@ -13,7 +13,7 @@ All diagrams are written in [Mermaid](https://mermaid.js.org/), which GitHub ren
 | [startup.md](startup.md) | Startup and shutdown | Startup and shutdown |
 | [command-dispatch.md](command-dispatch.md) | Handling a message, handling a slash command, `allowed` | Handling a message, handling a slash command, a command with a form |
 | [game-lifecycle.md](game-lifecycle.md) | `register`, `unregister` | `register`, `unregister`, `map`, `sitrep` |
-| [village.md](village.md) | `village` dispatch, `create`, `add`, `remove` | `village create` |
+| [village.md](village.md) | Choosing a `village` subcommand, `create`, `add`, `remove` | `village create` |
 | [characters.md](characters.md) | `character assign`, `kill`/`revive`, `ghostvote`, `team`, `announce` | `announce`, `send`, `grimoire`, `whisper` |
 | [gather.md](gather.md) | `gather` | `gather` countdown, `gather cancel` |
 
@@ -60,19 +60,19 @@ Which diagram covers which code. When you change one of these functions, update 
 | Code | Diagram |
 | --- | --- |
 | `cmd/bot/main.go` `main`, `config.Load`, `bot.Run` | [startup.md](startup.md) |
-| `newMessage`, `locked`, `messageRequest`, `runCommand`, `dispatch`, `commands`, `request` | [command-dispatch.md](command-dispatch.md) |
-| `interaction`, `slashCommand`, `modalSubmit`, `runSlash`, `slashRequest`, `slashResponder`, `resolveUsers`, `slashWords`, `slashOptions`, `modalCommand`, `modalFields`, `whisperModal`, `assignModal` | [command-dispatch.md](command-dispatch.md) |
-| `registerSlashCommands`, `slashCommands` | [startup.md](startup.md) |
+| `newMessage`, `locked`, `messageRequest`, `runCommand`, `resolve`, `findCommand`, `command`, `command.help`, `commands` (the table), `request` | [command-dispatch.md](command-dispatch.md) |
+| `interaction`, `opensForm`, `slashCommand`, `modalSubmit`, `runSlash`, `slashRequest`, `slashResponder`, `resolveUsers`, `slashWords`, `slashOptions`, `modalCommand`, `modalFields`, `whisperModal`, `assignModal` | [command-dispatch.md](command-dispatch.md) |
+| `registerSlashCommands`, `slashCommands`, `slashSubcommands` | [startup.md](startup.md) |
 | `allowed` | [command-dispatch.md](command-dispatch.md) |
 | `mapCommand` | [game-lifecycle.md](game-lifecycle.md) |
 | `register`, `newGame`, `findVoiceChannelID`, `assignStorytellerRole`, `findRoleID`, `channelAccessWarning` | [game-lifecycle.md](game-lifecycle.md) |
 | `unregister`, `removeGameRoles` | [game-lifecycle.md](game-lifecycle.md) |
 | `mapRooms`, `villageRooms`, `villageCodeLookup` | [game-lifecycle.md](game-lifecycle.md) |
 | `sitrep` | [game-lifecycle.md](game-lifecycle.md) |
-| `village`, `villageCommands`, `villageCreate`, `villageAdd`, `villageRemove`, `Game.ReplacePlayers`, `Game.AddPlayer`, `Game.RemovePlayer` | [village.md](village.md) |
+| `villageCreate`, `villageAdd`, `villageRemove`, `Game.ReplacePlayers`, `Game.AddPlayer`, `Game.RemovePlayer` | [village.md](village.md) |
 | `setPlayerRole`, `replyWithRoleWarning`, `lookupMember`, `memberDisplayName` | [village.md](village.md) |
-| `character`, `characterCommands`, `characterAssign`, `parseAssignment`, `splitAtMention`, `splitTeam`, `parseTeam`, `teamWordNames` | [characters.md](characters.md) |
-| `characterSetAlive`, `characterGhostVote`, `characterTeam`, `mentionedCharacters`, `Game.Assign`, `Game.SetAlive`, `Game.ToggleGhostVote`, `Game.SetTeam` | [characters.md](characters.md) |
+| `characterAssign`, `parseAssignment`, `splitAtMention`, `splitTeam`, `parseTeam`, `teamWordNames` | [characters.md](characters.md) |
+| `characterSetAlive`, `characterGhostVote`, `characterTeam`, `eachMentioned`, `mentionedCharacters`, `Game.Assign`, `Game.SetAlive`, `Game.ToggleGhostVote`, `Game.SetTeam` | [characters.md](characters.md) |
 | `characterAnnounce`, `Game.PendingLifeChanges`, `Game.MarkAnnounced` | [characters.md](characters.md) |
 | `characterSend`, `Game.MarkSent`, `sendDM`, `dmEmbed`, `dmErrorReason` | [characters.md](characters.md) |
 | `characterList`, `grimoireSummary`, `grimoireLine`, `chunkLines` | [characters.md](characters.md) |
@@ -82,8 +82,8 @@ Which diagram covers which code. When you change one of these functions, update 
 **Not diagrammed:** these are too simple to need a diagram, or aren't used yet. If one of them becomes part of a command's flow, add it to the table above.
 
 - `villageList`, `characterClear` (with `Game.ClearCharacter`): a single loop and a reply.
-- `sortedNames`, `Game.sortedPlayerIDs`, `Game.playerName`, `ghostVoteState`, `formatCountdown`, `plural`, `failureList`, `listLine`: formatting helpers.
-- `reply`, `send`: send a message and log any failure. `orNoGame`, `stringOption`, `mentionIDsIn`, `truncate`, and the slash option builders (`slashOption`, `subcommand` and the like): small helpers. `missingPermissions`, `isVillageRoom`, `botUserID`: small helpers for `channelAccessWarning`. `ping`: sends `pong`.
+- `sortedNames`, `Game.sortedPlayerIDs`, `Game.playerName`, `ghostVoteState`, `formatCountdown`, and the reply helpers in `format.go` (`countLine`, `listLine`, `failureList`, `plural`): formatting helpers.
+- `reply`, `send`: send a message and log any failure. `orNoGame`, `stringOption`, `mentionIDsIn`, `truncate`, the slash option builders (`slashOption`, `subcommand`, `playersOption`, `minutesOption` and the like) and `opts`: small helpers. `missingPermissions`, `isVillageRoom`, `botUserID`: small helpers for `channelAccessWarning`. `ping`: sends `pong`.
 
 ## Keeping the diagrams up to date
 

@@ -4,15 +4,17 @@
 
 The Storyteller gives each village player a secret character and team, sends them by DM, and tracks deaths and ghost votes. Covers [internal/bot/characters.go](../../internal/bot/characters.go), [internal/bot/grimoire.go](../../internal/bot/grimoire.go), [internal/bot/whisper.go](../../internal/bot/whisper.go) and [internal/bot/parse.go](../../internal/bot/parse.go). Spec: [characters.md](../specs/characters.md).
 
-Like every command, `character`, `grimoire` and `whisper` only run for the Storyteller in the admin channel; [`allowed`](command-dispatch.md#activity-allowed) checks that before they're called. A character (`Game.Characters`, user ID → `*Character`) holds these fields:
+Like every command, `character`, `grimoire` and `whisper` only run for the Storyteller in the admin channel; [`allowed`](command-dispatch.md#activity-allowed) checks that before they're called. Each village player (`Game.Players`, user ID → `*Player`) holds their life state and, once one is assigned, their character. Life belongs to the player, so changing or clearing the character never brings anyone back to life.
 
 | Field | Meaning |
 | --- | --- |
-| `Name`, `Guidance`, `Team` | What the player is told. `Team` is Good or Evil. |
-| `Sent` | Whether the player has been sent the current version. `assign` and `team` set it to false, and `send` sets it to true. |
-| `Alive` | Changed by `kill` and `revive`. Not public until `announce`. |
-| `AnnouncedAlive` | `Alive` as of the last `announce`. Where it differs from `Alive`, a change is waiting to be announced. |
-| `GhostVoteUsed` | Whether a dead player has used their ghost vote. `revive` resets it. |
+| `Player.Name` | The player's display name. |
+| `Player.Alive` | Changed by `kill` and `revive`. Not public until `announce`. A player starts alive when they join the village. |
+| `Player.AnnouncedAlive` | `Alive` as of the last `announce`. Where it differs from `Alive`, a change is waiting to be announced. |
+| `Player.GhostVoteUsed` | Whether a dead player has used their ghost vote. `revive` resets it. |
+| `Player.Character` | The player's `*Character`, or nil until one is assigned. |
+| `Character.Name`, `Guidance`, `Team` | What the player is told. `Team` is Good or Evil. |
+| `Character.Sent` | Whether the player has been sent the current version. `assign` and `team` set it to false, and `send` sets it to true. |
 
 ## Activity: `character assign`
 
@@ -36,11 +38,8 @@ flowchart TD
     lim -->|"[name over 200, or guidance<br/>over 4096 characters]"| bad
     lim -->|"[within limits]"| vil{" "}
     vil -->|"[player not in the village]"| notv("Reply: isn't in the village,<br/>use village add first")
-    vil -->|"[in the village]"| prev{" "}
-    prev -->|"[already had a character]"| keep("Carry over Alive, AnnouncedAlive<br/>and GhostVoteUsed")
-    prev -->|"[first character]"| fresh("Alive = AnnouncedAlive = true")
-    keep & fresh --> store("Store the character with Sent = false")
-    store --> reply("Reply: X will be the Y (team).<br/>Not sent yet.")
+    vil -->|"[in the village]"| store("Game.Assign: the player's Character = the new one,<br/>Sent = false. Life and ghost vote don't change.")
+    store --> reply("Reply: X will be the Y (team), and what it replaces.<br/>Not sent yet.")
     bad --> done(((" "))):::final
     notv --> done
     reply --> done
@@ -51,7 +50,7 @@ flowchart TD
 
 ## Activity: `character kill` / `revive`
 
-Only `Alive` changes. Nothing is posted publicly until `announce`.
+Only the player's `Alive` (and, on `revive`, the ghost vote) changes. Only players with a character can be killed or revived. Nothing is posted publicly until `announce`.
 
 ```mermaid
 flowchart TD
@@ -130,7 +129,7 @@ flowchart TD
     build --> post("Post the lines in Town Square")
     post --> d2{" "}
     d2 -->|"[post failed]"| fail("Reply: Could not post,<br/>nothing was marked as announced")
-    d2 -->|"[posted]"| mark("For every character:<br/>AnnouncedAlive = Alive")
+    d2 -->|"[posted]"| mark("Game.MarkAnnounced: for every player,<br/>AnnouncedAlive = Alive")
     mark --> ok("Reply: Announced, with the text")
     none --> done(((" "))):::final
     fail --> done
@@ -161,7 +160,7 @@ sequenceDiagram
             Bot->>REST: Reply "Could not post... Nothing was marked as announced."
         else posted
             REST-->>Town: Deaths and revivals
-            Note over Bot: AnnouncedAlive = Alive for every character
+            Note over Bot: Game.MarkAnnounced: AnnouncedAlive = Alive for every player
             Bot->>REST: Reply "Announced in Town Square: ..."
         end
     end
@@ -218,7 +217,7 @@ sequenceDiagram
         Bot->>REST: Reply "The village is empty..."
     else players in the village
         Note over Bot: First line: grimoireSummary, e.g.<br/>"Alive 6/8 · Good 5 · Evil 3 · 1 change(s) not yet announced"
-        Note over Bot: Then one grimoireLine per player, by name, e.g.<br/>"Monk (Good) · Dead, ghost vote used · sent"
+        Note over Bot: Then one grimoireLine per player, by name, e.g.<br/>"Monk (Good) · Dead, ghost vote used · sent", or "none"<br/>(with the life state if they died while they had a character)
         Note over Bot: chunkLines splits the lines into messages<br/>of at most 2000 characters
         loop each chunk
             Bot->>REST: ChannelMessageSendReply(admin channel, chunk)
@@ -259,4 +258,4 @@ sequenceDiagram
 
 ---
 
-Last checked against code: 2026-09-27 (f7831d7)
+Last checked against code: 2026-09-27 (85bccfb)

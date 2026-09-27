@@ -26,6 +26,7 @@ func (b *Bot) interaction(s *discordgo.Session, i *discordgo.InteractionCreate) 
 		return
 	}
 	var name string
+	var form bool
 	switch i.Type {
 	case discordgo.InteractionApplicationCommand:
 		if i.ApplicationCommandData().Name != slashCommandName {
@@ -33,6 +34,7 @@ func (b *Bot) interaction(s *discordgo.Session, i *discordgo.InteractionCreate) 
 		}
 		path, _ := slashOptions(i.ApplicationCommandData())
 		name = strings.Join(path, " ")
+		form = opensForm(path)
 	case discordgo.InteractionModalSubmit:
 		if !strings.HasPrefix(i.ModalSubmitData().CustomID, modalPrefix) {
 			return
@@ -43,6 +45,13 @@ func (b *Bot) interaction(s *discordgo.Session, i *discordgo.InteractionCreate) 
 	}
 
 	r := &slashResponder{b: b, i: i.Interaction}
+	// Discord needs an answer within 3 seconds, and another command can hold Bot.mu
+	// for longer while it talks to Discord, so acknowledge before waiting for it. A
+	// form must be the first answer, so a command that opens one answers under Bot.mu
+	// and can still miss the deadline if a slow command is running.
+	if !form && !r.acknowledge() {
+		return
+	}
 	b.locked(fmt.Sprintf("command %q", name), func() { r.reply(panicReply) }, func() {
 		if i.Type == discordgo.InteractionApplicationCommand {
 			b.slashCommand(i, r)
@@ -64,29 +73,22 @@ func (b *Bot) slashCommand(i *discordgo.InteractionCreate, r *slashResponder) {
 
 	// A form must be the first response, so check access before opening one.
 	path, options := slashOptions(data)
-	if key := strings.Join(path[1:], " "); key == "whisper" || key == "character assign" {
-		ok, refusal := allowed(b.game, commands[path[1]], req.authorID, req.guildID, req.channelID)
+	if cmd, _, _ := resolve(path[1:]); cmd.form != nil {
+		ok, refusal := allowed(b.game, cmd, req.authorID, req.guildID, req.channelID)
 		if !ok {
 			r.reply(orNoGame(refusal))
 			return
 		}
 		userID := mentionIDs[0]
-		playerName, inVillage := b.game.Players[userID]
+		player, inVillage := b.game.Players[userID]
 		if !inVillage {
 			r.reply(fmt.Sprintf("<@%s> isn't in the village. This command will not execute", userID))
 			return
 		}
-		if key == "whisper" {
-			r.modal(whisperModal(userID, playerName))
-		} else {
-			r.modal(assignModal(userID, playerName, stringOption(options, "team"), stringOption(options, "character")))
-		}
+		r.modal(cmd.form(userID, player.Name, options))
 		return
 	}
 
-	if !r.acknowledge() {
-		return
-	}
 	req.mentions = b.resolveUsers(i.GuildID, mentionIDs)
 	b.runSlash(req, r)
 }
@@ -97,9 +99,6 @@ func (b *Bot) modalSubmit(i *discordgo.InteractionCreate, r *slashResponder) {
 	words, content, userID, err := modalCommand(data.CustomID, modalFields(data))
 	if err != nil {
 		r.reply("Could not read that form.")
-		return
-	}
-	if !r.acknowledge() {
 		return
 	}
 	req := slashRequest(i, r, words, content)

@@ -15,13 +15,7 @@ func (b *Bot) characterList(req *request) {
 
 	lines := []string{"Grimoire: " + grimoireSummary(b.game)}
 	for i, id := range b.game.sortedPlayerIDs() {
-		line := fmt.Sprintf("%d. %s: ", i+1, b.game.Players[id])
-		if c, ok := b.game.Characters[id]; ok {
-			line += grimoireLine(c)
-		} else {
-			line += "none"
-		}
-		lines = append(lines, line)
+		lines = append(lines, fmt.Sprintf("%d. %s: %s", i+1, b.game.Players[id].Name, grimoireLine(b.game.Players[id])))
 	}
 
 	for _, chunk := range chunkLines(lines, maxMessageLength) {
@@ -29,30 +23,38 @@ func (b *Bot) characterList(req *request) {
 	}
 }
 
-// grimoireLine describes one character, e.g. "Monk (Good) · Dead, ghost vote used · sent · death not announced".
-func grimoireLine(c *Character) string {
-	parts := []string{fmt.Sprintf("%s (%s)", c.Name, c.Team)}
-
-	if c.Alive {
-		parts = append(parts, "Alive")
-	} else {
-		parts = append(parts, "Dead, ghost vote "+ghostVoteState(c))
-	}
-
-	if c.Sent {
-		parts = append(parts, "sent")
-	} else {
-		parts = append(parts, "not sent")
-	}
-
-	if c.Guidance != "" {
-		parts = append(parts, "has guidance")
+// grimoireLine describes one player, e.g. "Monk (Good) · Dead, ghost vote used · sent · death not announced",
+// or "none" for a player without a character. A player who died with a character
+// is still shown as dead once it's cleared.
+func grimoireLine(p *Player) string {
+	c := p.Character
+	parts := []string{"none"}
+	if c != nil {
+		parts = []string{fmt.Sprintf("%s (%s)", c.Name, c.Team)}
 	}
 
 	switch {
-	case !c.Alive && c.AnnouncedAlive:
+	case !p.Alive:
+		parts = append(parts, "Dead, ghost vote "+ghostVoteState(p))
+	case c != nil:
+		parts = append(parts, "Alive")
+	}
+
+	if c != nil {
+		if c.Sent {
+			parts = append(parts, "sent")
+		} else {
+			parts = append(parts, "not sent")
+		}
+		if c.Guidance != "" {
+			parts = append(parts, "has guidance")
+		}
+	}
+
+	switch {
+	case !p.Alive && p.AnnouncedAlive:
 		parts = append(parts, "death not announced")
-	case c.Alive && !c.AnnouncedAlive:
+	case p.Alive && !p.AnnouncedAlive:
 		parts = append(parts, "revival not announced")
 	}
 
@@ -62,21 +64,20 @@ func grimoireLine(c *Character) string {
 // grimoireSummary totals the characters, e.g. "Alive 6/8 · Good 5 · Evil 3 · 1 change not yet announced".
 func grimoireSummary(g *Game) string {
 	alive, good, evil, pending := 0, 0, 0, 0
-	for id := range g.Players {
-		c, ok := g.Characters[id]
-		if !ok {
+	for _, p := range g.Players {
+		if p.Alive != p.AnnouncedAlive {
+			pending++
+		}
+		if p.Character == nil {
 			continue
 		}
-		if c.Alive {
+		if p.Alive {
 			alive++
 		}
-		if c.Team == TeamEvil {
+		if p.Character.Team == TeamEvil {
 			evil++
 		} else {
 			good++
-		}
-		if c.Alive != c.AnnouncedAlive {
-			pending++
 		}
 	}
 
@@ -91,31 +92,9 @@ func grimoireSummary(g *Game) string {
 }
 
 // ghostVoteState describes a dead player's ghost vote.
-func ghostVoteState(c *Character) string {
-	if c.GhostVoteUsed {
+func ghostVoteState(p *Player) string {
+	if p.GhostVoteUsed {
 		return "used"
 	}
 	return "available"
-}
-
-// chunkLines joins lines with newlines into messages no longer than limit.
-// A single line longer than limit is cut.
-func chunkLines(lines []string, limit int) []string {
-	var chunks []string
-	var sb strings.Builder
-	for _, line := range lines {
-		line = truncate(line, limit)
-		if sb.Len() > 0 && sb.Len()+1+len(line) > limit {
-			chunks = append(chunks, sb.String())
-			sb.Reset()
-		}
-		if sb.Len() > 0 {
-			sb.WriteByte('\n')
-		}
-		sb.WriteString(line)
-	}
-	if sb.Len() > 0 {
-		chunks = append(chunks, sb.String())
-	}
-	return chunks
 }

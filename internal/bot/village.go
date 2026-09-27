@@ -2,26 +2,10 @@ package bot
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
 )
-
-const villageUsage = "Usage: `!botc village create`, `!botc village add @player...`, `!botc village remove @player...`, `!botc village list`"
-
-// villageCommands maps each village subcommand to its handler.
-var villageCommands = map[string]func(b *Bot, req *request){
-	"create": (*Bot).villageCreate,
-	"add":    (*Bot).villageAdd,
-	"remove": (*Bot).villageRemove,
-	"list":   (*Bot).villageList,
-}
-
-// village dispatches the village subcommands.
-func (b *Bot) village(req *request) {
-	b.dispatch(req, villageCommands, villageUsage)
-}
 
 // villageCreate replaces the player list with everyone in Town Square voice,
 // except the Storyteller and bots, and makes BoTC-Player match the new list.
@@ -73,7 +57,7 @@ func (b *Bot) villageCreate(req *request) {
 // villageAdd adds each mentioned user to the village and gives them BoTC-Player.
 func (b *Bot) villageAdd(req *request) {
 	if len(req.mentions) == 0 {
-		req.reply("Mention the players to add. " + villageUsage)
+		req.reply("Mention the players to add. " + req.usage)
 		return
 	}
 
@@ -85,8 +69,8 @@ func (b *Bot) villageAdd(req *request) {
 			skipped = append(skipped, user.Username+" (bot)")
 		case user.ID == b.game.StorytellerID:
 			skipped = append(skipped, user.Username+" (the Storyteller)")
-		case b.game.Players[user.ID] != "":
-			skipped = append(skipped, b.game.Players[user.ID]+" (already in the village)")
+		case b.game.Players[user.ID] != nil:
+			skipped = append(skipped, b.game.Players[user.ID].Name+" (already in the village)")
 		default:
 			added[user.ID] = memberDisplayName(b.lookupMember(b.game.GuildID, user.ID, nil), user.ID)
 		}
@@ -97,29 +81,26 @@ func (b *Bot) villageAdd(req *request) {
 		b.game.AddPlayer(id, name)
 	}
 
-	reply := fmt.Sprintf("Added %d player(s)", len(added))
-	if len(added) > 0 {
-		reply += ": " + strings.Join(sortedNames(added), ", ")
-	}
-	b.replyWithRoleWarning(req, reply+listLine("Skipped", skipped), roleErr)
+	reply := countLine("Added", "player(s)", sortedNames(added)) + listLine("Skipped", skipped)
+	b.replyWithRoleWarning(req, reply, roleErr)
 }
 
 // villageRemove removes each mentioned user from the village and takes BoTC-Player away.
 func (b *Bot) villageRemove(req *request) {
 	if len(req.mentions) == 0 {
-		req.reply("Mention the players to remove. " + villageUsage)
+		req.reply("Mention the players to remove. " + req.usage)
 		return
 	}
 
 	removed := make(map[string]string)
 	var skipped []string
 	for _, user := range req.mentions {
-		name, ok := b.game.Players[user.ID]
+		player, ok := b.game.Players[user.ID]
 		if !ok {
 			skipped = append(skipped, user.Username+" (not in the village)")
 			continue
 		}
-		removed[user.ID] = name
+		removed[user.ID] = player.Name
 	}
 
 	roleErr := b.setPlayerRole(nil, removed)
@@ -127,11 +108,8 @@ func (b *Bot) villageRemove(req *request) {
 		b.game.RemovePlayer(id)
 	}
 
-	reply := fmt.Sprintf("Removed %d player(s)", len(removed))
-	if len(removed) > 0 {
-		reply += ": " + strings.Join(sortedNames(removed), ", ")
-	}
-	b.replyWithRoleWarning(req, reply+listLine("Skipped", skipped), roleErr)
+	reply := countLine("Removed", "player(s)", sortedNames(removed)) + listLine("Skipped", skipped)
+	b.replyWithRoleWarning(req, reply, roleErr)
 }
 
 // villageList replies with the current players, numbered and sorted by name.
@@ -143,18 +121,8 @@ func (b *Bot) villageList(req *request) {
 
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "The village has %d player(s):", len(b.game.Players))
-	for i, name := range sortedNames(b.game.Players) {
-		fmt.Fprintf(&sb, "\n%d. %s", i+1, name)
+	for i, id := range b.game.sortedPlayerIDs() {
+		fmt.Fprintf(&sb, "\n%d. %s", i+1, b.game.Players[id].Name)
 	}
 	req.reply(sb.String())
-}
-
-// sortedNames returns the names (values) of an ID-to-name map in alphabetical order.
-func sortedNames(players map[string]string) []string {
-	names := make([]string, 0, len(players))
-	for _, name := range players {
-		names = append(names, name)
-	}
-	slices.Sort(names)
-	return names
 }

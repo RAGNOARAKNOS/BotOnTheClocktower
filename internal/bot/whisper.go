@@ -8,17 +8,15 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-const whisperUsage = "Usage: `!botc whisper @player <text>` (the text can span several lines)"
-
 // whisper DMs a village player a secret message from the Storyteller straight away.
 func (b *Bot) whisper(req *request) {
 	userID, text, err := parseWhisper(req.content)
 	if err != nil {
-		req.reply(fmt.Sprintf("Could not read that (%v). %s", err, whisperUsage))
+		req.reply(fmt.Sprintf("Could not read that (%v). %s", err, req.usage))
 		return
 	}
 
-	playerName, ok := b.game.Players[userID]
+	player, ok := b.game.Players[userID]
 	if !ok {
 		req.reply(fmt.Sprintf("<@%s> isn't in the village. This command will not execute", userID))
 		return
@@ -26,11 +24,11 @@ func (b *Bot) whisper(req *request) {
 
 	if err := b.sendDM(userID, b.dmEmbed("A message from the Storyteller", text)); err != nil {
 		log.Printf("Could not whisper to %s: %v", userID, err)
-		req.reply(fmt.Sprintf("Could not whisper to %s (%s).", playerName, dmErrorReason(err)))
+		req.reply(fmt.Sprintf("Could not whisper to %s (%s).", player.Name, dmErrorReason(err)))
 		return
 	}
 
-	req.reply(fmt.Sprintf("Whispered to %s.", playerName))
+	req.reply(fmt.Sprintf("Whispered to %s.", player.Name))
 }
 
 // sendDM sends an embed to the user in a direct message.

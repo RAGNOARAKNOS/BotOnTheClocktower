@@ -18,9 +18,9 @@ During the game the Storyteller records deaths and revivals, and each dead playe
 
 | Command | Effect |
 | --- | --- |
-| `!botc character assign @player [good\|evil] <Character>`, with optional guidance on the following lines (Shift+Enter) | Stores or replaces the player's character and team (Good if left out), and marks it unsent. A new character starts Alive with its ghost vote unused; reassigning keeps the life state. The reply echoes it back. |
+| `!botc character assign @player [good\|evil] <Character>`, with optional guidance on the following lines (Shift+Enter) | Stores or replaces the player's character and team (Good if left out), and marks it unsent. The player's life state and ghost vote don't change: players start Alive when they join the village, and a new character never brings a dead player back. The reply echoes it back. |
 | `!botc character team @player good\|evil` | Changes the team and marks the character unsent, so `send @player` tells them. |
-| `!botc character clear @player...` | Removes the stored character. |
+| `!botc character clear @player...` | Removes the stored character. A dead player stays dead. |
 | `!botc character kill @player...` | Marks the players Dead. Nothing is posted publicly. |
 | `!botc character revive @player...` | Marks the players Alive and gives their ghost vote back. |
 | `!botc character ghostvote @player...` | Switches a dead player's ghost vote between used and available. |
@@ -75,6 +75,7 @@ Your number tonight is 1.
 - `kill` on a dead player, or `revive` on a living one, is reported and skipped. `ghostvote` is refused for living players. `revive` gives the ghost vote back.
 - The bot remembers each player's Alive/Dead state as of the last announcement. `announce` only posts players whose state differs from that, so a kill followed by a revive before the announcement posts nothing. With nothing to announce, the reply says so and nothing is posted.
 - Players without a character can't be killed or revived.
+- Life and the ghost vote belong to the player, not the character. Clearing a dead player's character, then assigning another, leaves them dead, and a death not yet announced is still announced. The grimoire shows such a player as `none · Dead, ...`.
 - Guidance and whisper text are kept exactly as typed, including line breaks and Markdown, because the bot parses the raw message rather than splitting it into words.
 - Guidance or whisper text longer than 4096 characters (Discord's embed limit) is refused.
 - Assigning a character again replaces the previous one and marks it unsent.
@@ -123,13 +124,14 @@ Your number tonight is 1.
 - 2026-09-26: Deaths are tracked with `kill` / `revive`, and each dead player's ghost vote is tracked.
 - 2026-09-26: Deaths and revivals are announced in Town Square only when the Storyteller runs `announce`, which posts only what has changed since the last announcement.
 - 2026-09-26: `character list` (alias `!botc grimoire`) is the full state view in the admin channel.
+- 2026-09-27: Life and the ghost vote belong to the player, not the character. A dead player whose character is cleared and reassigned stays dead (previously the new character brought them back).
 
 ## Implementation
 
-- [internal/bot/characters.go](../../internal/bot/characters.go): `character` (dispatch), `characterAssign`, `characterTeam`, `characterSetAlive` (kill and revive), `characterGhostVote`, `characterAnnounce`, `characterClear`, `characterSend`. `characterList` (the grimoire) is in [internal/bot/grimoire.go](../../internal/bot/grimoire.go), and `whisper` and the DM helpers in [internal/bot/whisper.go](../../internal/bot/whisper.go). `!botc grimoire` in `runCommand` calls `characterList`.
+- [internal/bot/characters.go](../../internal/bot/characters.go): `characterAssign`, `characterTeam`, `characterSetAlive` (kill and revive), `characterGhostVote`, `characterAnnounce`, `characterClear`, `characterSend`. `characterList` (the grimoire) is in [internal/bot/grimoire.go](../../internal/bot/grimoire.go), and `whisper` and the DM helpers in [internal/bot/whisper.go](../../internal/bot/whisper.go). The `character` group and its subcommands, and `grimoire` (which also runs `characterList`), are entries in the `commands` table ([internal/bot/commandtable.go](../../internal/bot/commandtable.go)).
 - Parsing: `splitAtMention` finds the single mention on the first line (`<@id>` or `<@!id>`); `parseAssignment` and `parseWhisper` build on it and enforce the length limits. `splitTeam` takes off the optional team word, with `teamWordNames` for names that start with one ("Evil Twin"). These are in [internal/bot/parse.go](../../internal/bot/parse.go), with tests in `parse_test.go`.
-- Life state: `Alive` and `AnnouncedAlive` (the state at the last `announce`). `Game.PendingLifeChanges` lists the players where they differ; `announce` only marks them announced once the post succeeds.
+- Life state: `Player.Alive` and `Player.AnnouncedAlive` (the state at the last `announce`). `Game.PendingLifeChanges` lists the players where they differ; `announce` only marks them announced once the post succeeds.
 - Grimoire: `grimoireSummary` (totals), `grimoireLine` (one per player), `chunkLines` (keeps each reply under Discord's 2000-character limit).
 - Delivery: `sendDM` (`UserChannelCreate` + `ChannelMessageSendEmbed`), `dmEmbed` (footer names the server), `dmErrorReason` (turns Discord error 50007 into "they don't accept DMs from this server").
-- State: `Game.Characters` (user ID → `*Character`). `villageCreate`/`villageRemove` delete dropped players' entries, and `unregister` clears them.
+- State: each `Player` in `Game.Players` holds its `Character` (nil until assigned) as well as its life state, so a player dropped by `villageCreate`/`villageRemove` takes their character with them, and `unregister` clears them all.
 - Character names are limited to 200 characters to keep the embed title within Discord's 256-character limit.

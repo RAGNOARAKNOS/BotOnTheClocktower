@@ -17,6 +17,7 @@ Rules shared by every command: how messages are recognised as commands, and how 
   - No game registered: only `register` / `start` and `ping` run, from any channel; `register`'s channel becomes the admin channel. Every other command, including unknown ones, is ignored with no reply (logged to the console).
   - Game registered: every command must come from the Storyteller, in the admin channel of the registered server. The exception is `ping`, which the Storyteller can send from any channel. Anything else is refused: `Commands only work for the Storyteller (@Alice), in the admin channel #st-admin. This command will not execute`
 - Unknown command (from the Storyteller, in the admin channel) → `Huh? WTF is that command?!`
+- A group command (`village`, `character`) with no subcommand, or one it doesn't know → the usage of each of its subcommands. A command that can't be read (for example, missing its mentions) replies with its own usage.
 - If a command hits an unexpected bug (a panic), the bot stays up and replies `Something went wrong running that command. Check the bot's logs.`
 - Replies go to the channel the command was sent in. Because of the access rule, that's the admin channel, except for `register`, `ping` and refusals.
 
@@ -46,6 +47,7 @@ Rules shared by every command: how messages are recognised as commands, and how 
 
 ## Implementation
 
-- `newMessage` in [internal/bot/bot.go](../../internal/bot/bot.go), and `interaction` for slash commands in [internal/bot/interactions.go](../../internal/bot/interactions.go). Both build a `request`. The `commands` table, `runCommand` and `allowed` (the access check) in [internal/bot/commands.go](../../internal/bot/commands.go).
-- Each command's table entry sets its access: `beforeGame` (runs for anyone, anywhere, with no game: `register`, `start`, `ping`) and `anyChannel` (the Storyteller can run it anywhere: `ping`). `allowed` is pure and tested in `commands_test.go`.
+- `newMessage` in [internal/bot/bot.go](../../internal/bot/bot.go), and `interaction` for slash commands in [internal/bot/interactions.go](../../internal/bot/interactions.go). Both build a `request`. `runCommand`, `resolve` and `allowed` (the access check) are in [internal/bot/commands.go](../../internal/bot/commands.go).
+- Every command is declared once, in the `commands` table in [internal/bot/commandtable.go](../../internal/bot/commandtable.go): name, aliases, handler, access flags, usage, and its `/botc` description, options and form. Groups hold their subcommands. `resolve` walks the table (names are case-insensitive), and the handler gets the words after its name in `req.args` and its usage in `req.usage`.
+- Each command's table entry sets its access (a subcommand's are its own, not its group's): `beforeGame` (runs for anyone, anywhere, with no game: `register`, `start`, `ping`) and `anyChannel` (the Storyteller can run it anywhere: `ping`). `allowed` is pure and tested in `commands_test.go`.
 - Message content is never logged, because whispers and character guidance are secret. Send failures are logged by the `reply`/`send` helpers.

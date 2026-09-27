@@ -11,24 +11,38 @@ import (
 // testGame returns a game with two village players, Alice (with a character) and Bob (without).
 func testGame() *Game {
 	g := newGame("guild", "admin", "town", "st")
-	g.Players["a"] = "Alice"
-	g.Players["b"] = "Bob"
+	g.AddPlayer("a", "Alice")
+	g.AddPlayer("b", "Bob")
 	g.Assign("a", &Character{Name: "Monk", Team: TeamGood})
 	return g
 }
 
+// playerNames returns the village as user ID → name.
+func playerNames(g *Game) map[string]string {
+	names := make(map[string]string)
+	for id, p := range g.Players {
+		names[id] = p.Name
+	}
+	return names
+}
+
 func TestReplacePlayers(t *testing.T) {
 	g := testGame()
-	dropped := g.ReplacePlayers(map[string]string{"b": "Bob", "c": "Carol"})
+	g.Assign("b", &Character{Name: "Imp", Team: TeamEvil})
+	g.SetAlive("b", false)
+	dropped := g.ReplacePlayers(map[string]string{"b": "Bobby", "c": "Carol"})
 
 	if want := map[string]string{"a": "Alice"}; !maps.Equal(dropped, want) {
 		t.Errorf("dropped = %v, want %v", dropped, want)
 	}
-	if _, ok := g.Characters["a"]; ok {
-		t.Error("a dropped player kept their character")
+	if want := map[string]string{"b": "Bobby", "c": "Carol"}; !maps.Equal(playerNames(g), want) {
+		t.Errorf("Players = %v, want %v", playerNames(g), want)
 	}
-	if want := map[string]string{"b": "Bob", "c": "Carol"}; !maps.Equal(g.Players, want) {
-		t.Errorf("Players = %v, want %v", g.Players, want)
+	if b := g.Players["b"]; b.Character == nil || b.Character.Name != "Imp" || b.Alive {
+		t.Errorf("staying player = %+v, want still the Imp and dead", *b)
+	}
+	if c := g.Players["c"]; c.Character != nil || !c.Alive || !c.AnnouncedAlive {
+		t.Errorf("new player = %+v, want alive with no character", *c)
 	}
 }
 
@@ -38,31 +52,32 @@ func TestRemovePlayer(t *testing.T) {
 	if _, ok := g.Players["a"]; ok {
 		t.Error("player still in the village")
 	}
-	if _, ok := g.Characters["a"]; ok {
-		t.Error("removed player kept their character")
-	}
 }
 
 func TestAddPlayerAndClearCharacter(t *testing.T) {
 	g := testGame()
 	g.AddPlayer("c", "Carol")
-	if g.Players["c"] != "Carol" {
-		t.Errorf("Players[c] = %q, want Carol", g.Players["c"])
+	if c := g.Players["c"]; c.Name != "Carol" || !c.Alive || c.Character != nil {
+		t.Errorf("Players[c] = %+v, want Carol, alive, with no character", *c)
 	}
 
 	g.ClearCharacter("a")
-	if _, ok := g.Characters["a"]; ok {
-		t.Error("cleared character still there")
+	if a, ok := g.Players["a"]; !ok || a.Character != nil {
+		t.Error("clearing a character should keep the player and remove the character")
 	}
-	if g.Players["a"] != "Alice" {
-		t.Error("clearing a character removed the player from the village")
+
+	// Adding a player again only changes their name.
+	g.Assign("a", &Character{Name: "Monk"})
+	g.AddPlayer("a", "Alicia")
+	if a := g.Players["a"]; a.Name != "Alicia" || a.Character == nil {
+		t.Errorf("re-added player = %+v, want Alicia with the Monk", *a)
 	}
 }
 
 func TestMarkSent(t *testing.T) {
 	g := testGame()
 	g.MarkSent("a")
-	if !g.Characters["a"].Sent {
+	if !g.Players["a"].Character.Sent {
 		t.Error("character not marked sent")
 	}
 }
@@ -77,10 +92,10 @@ func TestSortedPlayerIDs(t *testing.T) {
 
 func TestAssign(t *testing.T) {
 	g := testGame()
-
-	c := g.Characters["a"]
-	if !c.Alive || !c.AnnouncedAlive || c.Sent || c.GhostVoteUsed {
-		t.Fatalf("new character = %+v, want alive, announced alive, unsent, ghost vote unused", *c)
+	a := g.Players["a"]
+	c := a.Character
+	if !a.Alive || !a.AnnouncedAlive || c.Sent || a.GhostVoteUsed {
+		t.Fatalf("new player = %+v with %+v, want alive, announced alive, unsent, ghost vote unused", *a, *c)
 	}
 
 	c.Sent = true
@@ -90,15 +105,33 @@ func TestAssign(t *testing.T) {
 	if previous != c {
 		t.Errorf("Assign returned %v, want the replaced character", previous)
 	}
-	got := g.Characters["a"]
-	if got.Name != "Imp" || got.Sent || got.Alive || !got.AnnouncedAlive || !got.GhostVoteUsed {
-		t.Errorf("replacement = %+v, want Imp, unsent, still dead (not yet announced), ghost vote still used", *got)
+	if got := a.Character; got.Name != "Imp" || got.Sent {
+		t.Errorf("replacement = %+v, want Imp, unsent", *got)
+	}
+	if a.Alive || !a.AnnouncedAlive || !a.GhostVoteUsed {
+		t.Errorf("after reassigning: %+v, want still dead (not yet announced), ghost vote still used", *a)
+	}
+}
+
+// TestNewCharacterDoesNotRevive checks a dead player stays dead when their character
+// is cleared and they're given another (decided 2026-09-27, characters.md).
+func TestNewCharacterDoesNotRevive(t *testing.T) {
+	g := testGame()
+	g.SetAlive("a", false)
+	g.ClearCharacter("a")
+	if died, _ := g.PendingLifeChanges(); !slices.Equal(died, []string{"Alice"}) {
+		t.Errorf("pending deaths after clearing = %v, want [Alice]", died)
+	}
+
+	g.Assign("a", &Character{Name: "Imp", Team: TeamEvil})
+	if g.Players["a"].Alive {
+		t.Error("a new character brought a dead player back to life")
 	}
 }
 
 func TestSetTeam(t *testing.T) {
 	g := testGame()
-	g.Characters["a"].Sent = true
+	g.Players["a"].Character.Sent = true
 
 	if g.SetTeam("a", TeamGood) {
 		t.Error("SetTeam to the same team reported a change")
@@ -106,7 +139,7 @@ func TestSetTeam(t *testing.T) {
 	if !g.SetTeam("a", TeamEvil) {
 		t.Fatal("SetTeam to a new team reported no change")
 	}
-	if c := g.Characters["a"]; c.Team != TeamEvil || c.Sent {
+	if c := g.Players["a"].Character; c.Team != TeamEvil || c.Sent {
 		t.Errorf("after SetTeam: %+v, want Evil and unsent", *c)
 	}
 }
@@ -124,7 +157,7 @@ func TestSetAliveAndGhostVote(t *testing.T) {
 	if !g.SetAlive("a", false) {
 		t.Fatal("killing a living player reported no change")
 	}
-	if !g.ToggleGhostVote("a") || !g.Characters["a"].GhostVoteUsed {
+	if !g.ToggleGhostVote("a") || !g.Players["a"].GhostVoteUsed {
 		t.Fatal("a dead player's ghost vote wasn't used")
 	}
 	if died, _ := g.PendingLifeChanges(); len(died) != 1 || died[0] != "Alice" {
@@ -134,7 +167,7 @@ func TestSetAliveAndGhostVote(t *testing.T) {
 	if !g.SetAlive("a", true) {
 		t.Fatal("reviving a dead player reported no change")
 	}
-	if g.Characters["a"].GhostVoteUsed {
+	if g.Players["a"].GhostVoteUsed {
 		t.Error("reviving didn't give the ghost vote back")
 	}
 

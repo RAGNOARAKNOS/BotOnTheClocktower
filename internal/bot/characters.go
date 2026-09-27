@@ -14,58 +14,27 @@ const (
 	TeamEvil Team = "Evil"
 )
 
-// Character is the game character the Storyteller has given a player, sent to them by DM.
+// Character is the game character the Storyteller has given a player, sent to them
+// by DM. Whether the player is alive is kept on their Player.
 type Character struct {
 	Name     string
 	Guidance string // optional; kept exactly as typed
 	Team     Team
 	Sent     bool
-
-	Alive bool
-	// AnnouncedAlive is Alive as of the last `character announce`. While the two
-	// differ, a death or revival is waiting to be announced.
-	AnnouncedAlive bool
-	// GhostVoteUsed records whether a dead player has spent their one remaining vote.
-	GhostVoteUsed bool
 }
 
-const (
-	// maxCharacterName keeps "Your character: <name> (<team>)" within Discord's 256-character embed title limit.
-	maxCharacterName = 200
-
-	characterUsage = "Usage: `!botc character assign @player [good|evil] <Character>` (guidance on the following lines), " +
-		"`!botc character team @player good|evil`, `!botc character kill @player...`, `!botc character revive @player...`, " +
-		"`!botc character ghostvote @player...`, `!botc character announce`, `!botc character clear @player...`, " +
-		"`!botc character list` (or `!botc grimoire`), `!botc character send [@player...]`"
-)
-
-// characterCommands maps each character subcommand to its handler.
-var characterCommands = map[string]func(b *Bot, req *request){
-	"assign":    (*Bot).characterAssign,
-	"team":      (*Bot).characterTeam,
-	"kill":      func(b *Bot, req *request) { b.characterSetAlive(req, false) },
-	"revive":    func(b *Bot, req *request) { b.characterSetAlive(req, true) },
-	"ghostvote": (*Bot).characterGhostVote,
-	"announce":  (*Bot).characterAnnounce,
-	"clear":     (*Bot).characterClear,
-	"list":      (*Bot).characterList,
-	"send":      (*Bot).characterSend,
-}
-
-// character dispatches the character subcommands.
-func (b *Bot) character(req *request) {
-	b.dispatch(req, characterCommands, characterUsage)
-}
+// maxCharacterName keeps "Your character: <name> (<team>)" within Discord's 256-character embed title limit.
+const maxCharacterName = 200
 
 // characterAssign stores (or replaces) a player's character. It isn't sent until `character send`.
 func (b *Bot) characterAssign(req *request) {
 	userID, team, name, guidance, err := parseAssignment(req.content)
 	if err != nil {
-		req.reply(fmt.Sprintf("Could not read that (%v). %s", err, characterUsage))
+		req.reply(fmt.Sprintf("Could not read that (%v). %s", err, req.usage))
 		return
 	}
 
-	playerName, ok := b.game.Players[userID]
+	player, ok := b.game.Players[userID]
 	if !ok {
 		req.reply(fmt.Sprintf("<@%s> isn't in the village. Add them with `!botc village add` first.", userID))
 		return
@@ -73,7 +42,7 @@ func (b *Bot) characterAssign(req *request) {
 
 	previous := b.game.Assign(userID, &Character{Name: name, Guidance: guidance, Team: team})
 
-	reply := fmt.Sprintf("%s will be the %s (%s", playerName, name, team)
+	reply := fmt.Sprintf("%s will be the %s (%s", player.Name, name, team)
 	if guidance != "" {
 		reply += fmt.Sprintf(", with %d line(s) of guidance", strings.Count(guidance, "\n")+1)
 	}
@@ -88,7 +57,7 @@ func (b *Bot) characterAssign(req *request) {
 // characterTeam moves the mentioned players' characters to another team and marks them unsent.
 func (b *Bot) characterTeam(req *request) {
 	var team Team
-	for _, word := range req.words[3:] {
+	for _, word := range req.args {
 		if t, ok := parseTeam(word); ok {
 			team = t
 		}
@@ -98,19 +67,16 @@ func (b *Bot) characterTeam(req *request) {
 		return
 	}
 
-	ids, skipped := b.mentionedCharacters(req)
-	var changed []string
-	for _, id := range ids {
+	changed, skipped := b.eachMentioned(req, func(id string, _ *Player) string {
 		if !b.game.SetTeam(id, team) {
-			skipped = append(skipped, fmt.Sprintf("%s (already %s)", b.game.Players[id], team))
-			continue
+			return "already " + string(team)
 		}
-		changed = append(changed, b.game.Players[id])
-	}
+		return ""
+	})
 
-	reply := fmt.Sprintf("Now %s: %d player(s)", team, len(changed))
+	reply := countLine("Now "+string(team)+":", "player(s)", changed)
 	if len(changed) > 0 {
-		reply += ": " + strings.Join(changed, ", ") + ". Not told yet; use `!botc character send` to send them their updated character."
+		reply += ". Not told yet; use `!botc character send` to send them their updated character."
 	}
 	req.reply(reply + listLine("Skipped", skipped))
 }
@@ -119,7 +85,7 @@ func (b *Bot) characterTeam(req *request) {
 // publicly until `character announce`.
 func (b *Bot) characterSetAlive(req *request, alive bool) {
 	if len(req.mentions) == 0 {
-		req.reply("Mention the players. " + characterUsage)
+		req.reply("Mention the players. " + req.usage)
 		return
 	}
 
@@ -128,21 +94,14 @@ func (b *Bot) characterSetAlive(req *request, alive bool) {
 		state = "alive"
 	}
 
-	ids, skipped := b.mentionedCharacters(req)
-	var changed []string
-	for _, id := range ids {
+	changed, skipped := b.eachMentioned(req, func(id string, _ *Player) string {
 		if !b.game.SetAlive(id, alive) {
-			skipped = append(skipped, fmt.Sprintf("%s (already %s)", b.game.Players[id], state))
-			continue
+			return "already " + state
 		}
-		changed = append(changed, b.game.Players[id])
-	}
+		return ""
+	})
 
-	reply := fmt.Sprintf("Now %s: %d player(s)", state, len(changed))
-	if len(changed) > 0 {
-		reply += ": " + strings.Join(changed, ", ")
-	}
-	reply += "." + listLine("Skipped", skipped)
+	reply := countLine("Now "+state+":", "player(s)", changed) + "." + listLine("Skipped", skipped)
 	died, revived := b.game.PendingLifeChanges()
 	if pending := len(died) + len(revived); pending > 0 {
 		reply += fmt.Sprintf("\n%d change(s) waiting to be announced; use `!botc character announce`.", pending)
@@ -155,23 +114,22 @@ func (b *Bot) characterSetAlive(req *request, alive bool) {
 // characterGhostVote switches the mentioned dead players' ghost votes between used and available.
 func (b *Bot) characterGhostVote(req *request) {
 	if len(req.mentions) == 0 {
-		req.reply("Mention the dead players whose ghost vote to change. " + characterUsage)
+		req.reply("Mention the dead players whose ghost vote to change. " + req.usage)
 		return
 	}
 
-	ids, skipped := b.mentionedCharacters(req)
-	var changed []string
-	for _, id := range ids {
+	var lines []string
+	_, skipped := b.eachMentioned(req, func(id string, p *Player) string {
 		if !b.game.ToggleGhostVote(id) {
-			skipped = append(skipped, b.game.Players[id]+" (alive, so no ghost vote)")
-			continue
+			return "alive, so no ghost vote"
 		}
-		changed = append(changed, fmt.Sprintf("%s: ghost vote %s", b.game.Players[id], ghostVoteState(b.game.Characters[id])))
-	}
+		lines = append(lines, fmt.Sprintf("%s: ghost vote %s", p.Name, ghostVoteState(p)))
+		return ""
+	})
 
 	reply := "No ghost votes changed."
-	if len(changed) > 0 {
-		reply = strings.Join(changed, "\n")
+	if len(lines) > 0 {
+		reply = strings.Join(lines, "\n")
 	}
 	req.reply(reply + listLine("Skipped", skipped))
 }
@@ -207,29 +165,39 @@ func (b *Bot) characterAnnounce(req *request) {
 // characterClear removes the stored characters of the mentioned players.
 func (b *Bot) characterClear(req *request) {
 	if len(req.mentions) == 0 {
-		req.reply("Mention the players to clear. " + characterUsage)
+		req.reply("Mention the players to clear. " + req.usage)
 		return
 	}
 
-	ids, skipped := b.mentionedCharacters(req)
-	var cleared []string
-	for _, id := range ids {
+	cleared, skipped := b.eachMentioned(req, func(id string, _ *Player) string {
 		b.game.ClearCharacter(id)
-		cleared = append(cleared, b.game.Players[id])
-	}
+		return ""
+	})
+	req.reply(countLine("Cleared", "character(s)", cleared) + listLine("Skipped", skipped))
+}
 
-	reply := fmt.Sprintf("Cleared %d character(s)", len(cleared))
-	if len(cleared) > 0 {
-		reply += ": " + strings.Join(cleared, ", ")
+// eachMentioned applies change to each mentioned player who has a character, in
+// mention order. change returns "" if it changed the player, or why it didn't (such
+// as "already dead"). eachMentioned returns the names of the players changed, and a
+// note for each mention skipped, including those without a character.
+func (b *Bot) eachMentioned(req *request, change func(id string, p *Player) (skip string)) (changed, skipped []string) {
+	ids, skipped := b.mentionedCharacters(req)
+	for _, id := range ids {
+		p := b.game.Players[id]
+		if why := change(id, p); why != "" {
+			skipped = append(skipped, p.Name+" ("+why+")")
+			continue
+		}
+		changed = append(changed, p.Name)
 	}
-	req.reply(reply + listLine("Skipped", skipped))
+	return changed, skipped
 }
 
 // mentionedCharacters returns the IDs of the mentioned players who have a
 // character, in mention order, and a note for each mention without one.
 func (b *Bot) mentionedCharacters(req *request) (ids, skipped []string) {
 	for _, user := range req.mentions {
-		if _, ok := b.game.Characters[user.ID]; ok {
+		if p, ok := b.game.Players[user.ID]; ok && p.Character != nil {
 			ids = append(ids, user.ID)
 		} else {
 			skipped = append(skipped, b.game.playerName(user.ID, user.Username)+" (no character)")
@@ -246,7 +214,7 @@ func (b *Bot) characterSend(req *request) {
 		targets, skipped = b.mentionedCharacters(req)
 	} else {
 		for _, id := range b.game.sortedPlayerIDs() {
-			if c, ok := b.game.Characters[id]; ok && !c.Sent {
+			if c := b.game.Players[id].Character; c != nil && !c.Sent {
 				targets = append(targets, id)
 			}
 		}
@@ -254,9 +222,9 @@ func (b *Bot) characterSend(req *request) {
 
 	var sent, failed []string
 	for _, id := range targets {
-		c := b.game.Characters[id]
+		c := b.game.Players[id].Character
 		embed := b.dmEmbed(fmt.Sprintf("Your character: %s (%s)", c.Name, c.Team), c.Guidance)
-		name := b.game.Players[id]
+		name := b.game.Players[id].Name
 		if err := b.sendDM(id, embed); err != nil {
 			log.Printf("Could not DM %s their character: %v", id, err)
 			failed = append(failed, fmt.Sprintf("%s (%s)", name, dmErrorReason(err)))
@@ -268,8 +236,8 @@ func (b *Bot) characterSend(req *request) {
 
 	var missing []string
 	for _, id := range b.game.sortedPlayerIDs() {
-		if _, ok := b.game.Characters[id]; !ok {
-			missing = append(missing, b.game.Players[id])
+		if p := b.game.Players[id]; p.Character == nil {
+			missing = append(missing, p.Name)
 		}
 	}
 
@@ -277,10 +245,7 @@ func (b *Bot) characterSend(req *request) {
 	if len(targets) == 0 && len(skipped) == 0 {
 		reply = "Nothing to send: every assigned character has already been sent. Use `!botc character send @player` to resend."
 	} else {
-		reply = fmt.Sprintf("Sent %d character(s)", len(sent))
-		if len(sent) > 0 {
-			reply += ": " + strings.Join(sent, ", ")
-		}
+		reply = countLine("Sent", "character(s)", sent)
 	}
 	if len(failed) > 0 {
 		reply += listLine("Failed", failed) + ". Fix the problem and run `!botc character send` again."

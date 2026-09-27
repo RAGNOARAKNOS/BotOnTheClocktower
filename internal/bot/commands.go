@@ -3,6 +3,7 @@ package bot
 import (
 	"fmt"
 	"log"
+	"slices"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -14,6 +15,11 @@ type request struct {
 	authorID, guildID, channelID string
 	// words is the command as words: "!botc" (or "/botc"), the command name, then its arguments.
 	words []string
+	// args are the words after the command's name, and after the subcommand's if it has one.
+	args []string
+	// usage shows how to write the command, starting "Usage: ", for replies to a command
+	// that couldn't be read.
+	usage string
 	// content is the raw command text, for the commands that parse free text (parse.go).
 	content string
 	// mentions are the users the command names.
@@ -24,71 +30,111 @@ type request struct {
 	say   func(text string)
 }
 
-// command is one `!botc <name>` / `/botc <name>` command. By default a command only
-// runs while a game is registered, for the Storyteller, in the admin channel; the flags relax that.
+// command is one `!botc` / `/botc` command, or a group of subcommands such as
+// `village`. Everything about a command is declared in its entry in the commands
+// table (commandtable.go): how it runs, who may run it, its help and its /botc
+// options. By default a command only runs while a game is registered, for the
+// Storyteller, in the admin channel; the flags relax that. A subcommand's access
+// is its own: it doesn't inherit its group's flags.
 type command struct {
+	name string
+	// aliases are other names for the command. They work as `!botc` words only;
+	// /botc has just the name.
+	aliases []string
+	// description is the command's /botc help text, 1 to 100 characters.
+	description string
+	// usage shows how to write the command, starting with "`!botc <name>", e.g.
+	// "`!botc character team @player good|evil`". The handler gets it in req.usage.
+	usage string
+	// run handles the command. A group has none: its subcommands run instead.
 	run func(b *Bot, req *request)
+	// subcommands make the command a group; the next word names one of them.
+	subcommands []command
+	// options are the command's /botc options. slashWords turns them into the words
+	// `!botc` would have, so the handler reads them from req.args and req.mentions.
+	options []*discordgo.ApplicationCommandOption
+	// form, if set, makes /botc answer with a form (see slashCommand); submitting
+	// it runs the command.
+	form formOpener
+
 	// beforeGame lets anyone run the command, from any channel, while no game is registered.
 	beforeGame bool
 	// anyChannel lets the Storyteller run the command outside the admin channel.
 	anyChannel bool
-	// alias marks another name for a command listed under its own name. Aliases work
-	// as `!botc` words only; slash commands have just the main name.
-	alias bool
 }
 
-// commands maps each command name, and each alias, to its command.
-var commands = map[string]command{
-	"ping":       {run: (*Bot).ping, beforeGame: true, anyChannel: true},
-	"register":   {run: (*Bot).register, beforeGame: true},
-	"start":      {run: (*Bot).register, beforeGame: true, alias: true},
-	"unregister": {run: (*Bot).unregister},
-	"end":        {run: (*Bot).unregister, alias: true},
-	"sitrep":     {run: (*Bot).sitrep},
-	"map":        {run: (*Bot).mapCommand},
-	"village":    {run: (*Bot).village},
-	"character":  {run: (*Bot).character},
-	"grimoire":   {run: (*Bot).characterList},
-	"whisper":    {run: (*Bot).whisper},
-	"gather":     {run: (*Bot).gather},
-}
-
-// runCommand runs the command named by the second word, if the sender may run it.
+// runCommand runs the command the words name, if the sender may run it.
 // It returns false if the command was ignored without a reply.
 func (b *Bot) runCommand(req *request) (answered bool) {
-	name := strings.ToLower(req.words[1])
-	cmd, known := commands[name]
+	cmd, used, known := resolve(req.words[1:])
 
 	ok, refusal := allowed(b.game, cmd, req.authorID, req.guildID, req.channelID)
 	if !ok {
 		if refusal == "" {
-			log.Printf("Ignoring %q: no game registered", name)
+			log.Printf("Ignoring %q: no game registered", strings.ToLower(req.words[1]))
 			return false
 		}
 		req.reply(refusal)
 		return true
 	}
 
-	if !known {
+	switch {
+	case !known:
 		req.say("Huh? WTF is that command?!")
-		return true
+	case cmd.run == nil:
+		// A group, without a subcommand it knows.
+		req.reply(cmd.help())
+	default:
+		req.args = req.words[1+used:]
+		req.usage = cmd.help()
+		cmd.run(b, req)
 	}
-	cmd.run(b, req)
 	return true
 }
 
-// dispatch runs the subcommand named by the third word from subcommands, or replies with usage.
-func (b *Bot) dispatch(req *request, subcommands map[string]func(b *Bot, req *request), usage string) {
-	if len(req.words) < 3 {
-		req.reply(usage)
-		return
+// resolve follows names (a command's name or alias, then a subcommand's name) through
+// the commands table. It returns the command they lead to and how many names that
+// took. For a group whose subcommand is missing or unknown, that's the group itself.
+// known is false if the first name isn't a command.
+func resolve(names []string) (cmd command, used int, known bool) {
+	if len(names) == 0 {
+		return command{}, 0, false
 	}
-	run, ok := subcommands[strings.ToLower(req.words[2])]
-	if !ok {
-		req.reply(usage)
-		return
+	if cmd, known = findCommand(commands, names[0]); !known {
+		return command{}, 0, false
 	}
-	run(b, req)
+	for used = 1; used < len(names) && len(cmd.subcommands) > 0; used++ {
+		sub, ok := findCommand(cmd.subcommands, names[used])
+		if !ok {
+			break
+		}
+		cmd = sub
+	}
+	return cmd, used, true
+}
+
+// findCommand returns the command in cmds with this name or alias, ignoring capitals.
+func findCommand(cmds []command, name string) (command, bool) {
+	matches := func(s string) bool { return strings.EqualFold(s, name) }
+	for _, c := range cmds {
+		if matches(c.name) || slices.ContainsFunc(c.aliases, matches) {
+			return c, true
+		}
+	}
+	return command{}, false
+}
+
+// help returns how to write the command, starting "Usage: ": its own usage, or for a
+// group, each of its subcommands'.
+func (c command) help() string {
+	if len(c.subcommands) == 0 {
+		return "Usage: " + c.usage
+	}
+	forms := make([]string, len(c.subcommands))
+	for i, sub := range c.subcommands {
+		forms[i] = sub.usage
+	}
+	return "Usage: " + strings.Join(forms, ", ")
 }
 
 // allowed decides whether a command may run. With no game registered, only commands
@@ -129,12 +175,4 @@ func (b *Bot) send(channelID, text string) {
 	if _, err := b.discord.ChannelMessageSend(channelID, text); err != nil {
 		log.Printf("Could not post in channel %s: %v", channelID, err)
 	}
-}
-
-// listLine formats a reply line such as "\nSkipped: Alice, Bob", or "" if there are no items.
-func listLine(label string, items []string) string {
-	if len(items) == 0 {
-		return ""
-	}
-	return "\n" + label + ": " + strings.Join(items, ", ")
 }

@@ -1,19 +1,14 @@
 package bot
 
-import (
-	"slices"
-	"strings"
-	"testing"
-	"unicode/utf8"
-)
+import "testing"
 
 func TestGrimoireSummary(t *testing.T) {
 	g := newGame("guild", "admin", "town", "st")
-	g.Players = map[string]string{"1": "Alice", "2": "Bob", "3": "Carol", "4": "Dave"}
-	g.Characters = map[string]*Character{
-		"1": {Team: TeamEvil, Alive: true, AnnouncedAlive: true},
-		"2": {Team: TeamGood, Alive: false, AnnouncedAlive: true},
-		"3": {Team: TeamGood, Alive: true, AnnouncedAlive: true},
+	g.Players = map[string]*Player{
+		"1": {Name: "Alice", Alive: true, AnnouncedAlive: true, Character: &Character{Team: TeamEvil}},
+		"2": {Name: "Bob", Alive: false, AnnouncedAlive: true, Character: &Character{Team: TeamGood}},
+		"3": {Name: "Carol", Alive: true, AnnouncedAlive: true, Character: &Character{Team: TeamGood}},
+		"4": {Name: "Dave", Alive: true, AnnouncedAlive: true},
 	}
 
 	got := grimoireSummary(g)
@@ -23,18 +18,25 @@ func TestGrimoireSummary(t *testing.T) {
 	}
 }
 
-func TestChunkLines(t *testing.T) {
-	lines := []string{strings.Repeat("a", 6), strings.Repeat("b", 3), strings.Repeat("c", 4)}
-	got := chunkLines(lines, 10)
-	want := []string{"aaaaaa\nbbb", "cccc"}
-	if !slices.Equal(got, want) {
-		t.Errorf("got %q, want %q", got, want)
+func TestGrimoireLine(t *testing.T) {
+	monk := func() *Character { return &Character{Name: "Monk", Team: TeamGood} }
+	tests := []struct {
+		name   string
+		player Player
+		want   string
+	}{
+		{"alive, unsent", Player{Alive: true, AnnouncedAlive: true, Character: monk()}, "Monk (Good) · Alive · not sent"},
+		{"sent, with guidance", Player{Alive: true, AnnouncedAlive: true, Character: &Character{Name: "Imp", Team: TeamEvil, Sent: true, Guidance: "Kill"}},
+			"Imp (Evil) · Alive · sent · has guidance"},
+		{"dead, not announced", Player{AnnouncedAlive: true, GhostVoteUsed: true, Character: monk()},
+			"Monk (Good) · Dead, ghost vote used · not sent · death not announced"},
+		{"revived, not announced", Player{Alive: true, Character: monk()}, "Monk (Good) · Alive · not sent · revival not announced"},
+		{"no character", Player{Alive: true, AnnouncedAlive: true}, "none"},
+		{"no character, died with one", Player{AnnouncedAlive: true}, "none · Dead, ghost vote available · death not announced"},
 	}
-
-	// A long line is cut between characters, never inside one.
-	for _, chunk := range chunkLines([]string{strings.Repeat("é", 6)}, 4) {
-		if !utf8.ValidString(chunk) || utf8.RuneCountInString(chunk) > 4 {
-			t.Errorf("multi-byte line cut to %q, want at most 4 whole characters", chunk)
+	for _, tt := range tests {
+		if got := grimoireLine(&tt.player); got != tt.want {
+			t.Errorf("%s: got %q, want %q", tt.name, got, tt.want)
 		}
 	}
 }

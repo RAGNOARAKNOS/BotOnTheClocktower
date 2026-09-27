@@ -139,4 +139,4 @@ sequenceDiagram
 
 ---
 
-Last checked against code: 2026-09-27 (f7831d7)
+Last checked against code: 2026-09-27 (85bccfb)

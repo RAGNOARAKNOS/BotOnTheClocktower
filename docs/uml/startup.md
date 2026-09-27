@@ -61,7 +61,7 @@ sequenceDiagram
     loop each server the bot is in, and any it joins later
         Gateway-->>Session: GuildCreate event
         Session-)Bot: registerSlashCommands
-        Bot->>Gateway: ApplicationCommandBulkOverwrite(app, server, /botc), over REST
+        Bot->>Gateway: ApplicationCommandBulkOverwrite(app, server, /botc), over REST.<br/>slashCommands builds /botc from the commands table
     end
     Session-->>-Bot: nil
     Note over Bot: Blocks on the stop channel
@@ -75,4 +75,4 @@ sequenceDiagram
 
 ---
 
-Last checked against code: 2026-09-27 (f7831d7)
+Last checked against code: 2026-09-27 (85bccfb)

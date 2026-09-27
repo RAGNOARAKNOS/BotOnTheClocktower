@@ -69,14 +69,14 @@ Let the Storyteller run every command through Discord's `/botc` slash-command UI
 
 - Handlers take a `request` ([internal/bot/commands.go](../../internal/bot/commands.go)). `newMessage` builds one from a message, and the slash side from an interaction.
 - [internal/bot/slash.go](../../internal/bot/slash.go):
-  - `slashCommands` defines `/botc`.
+  - `slashCommands` builds `/botc` from the `commands` table ([internal/bot/commandtable.go](../../internal/bot/commandtable.go)): each entry's name, description and options, with groups as subcommand groups (`slashSubcommands`).
   - `slashWords` turns options into `!botc` words plus mentioned user IDs; `players` text is read with `mentionPattern`.
-  - `whisperModal` and `assignModal` build the forms. `modalCommand` turns a submitted form into the raw text `parse.go` expects.
+  - `whisperModal` and `assignModal` build the forms; each is the `form` of its command's table entry. `modalCommand` turns a submitted form into the raw text `parse.go` expects.
 - [internal/bot/interactions.go](../../internal/bot/interactions.go):
   - `registerSlashCommands` runs on every `GuildCreate` and uses `ApplicationCommandBulkOverwrite`, so the servers always have the current definition.
-  - `interaction` holds `Bot.mu` and recovers from panics.
+  - `interaction` acknowledges the command before taking `Bot.mu` (except a command with a form, which must answer with the form), so a slow command already running can't make it miss Discord's 3-second deadline. It then holds `Bot.mu` and recovers from panics.
   - `slashResponder` acknowledges within 3 seconds, fills in the reply, and sends later replies as follow-ups, all ephemeral.
-- `village` and `character` subcommands are tables (`villageCommands`, `characterCommands`) so `TestSlashParity` can compare them with the slash definition.
+- Because `/botc` is built from the same table as `!botc`, the two can't drift apart. `TestSlashDefinition` checks the definition keeps to Discord's limits (a bad one is refused at registration, which is only logged), and `TestSlashOptionsRead` checks `slashWords` reads every option.
 - Known gaps:
   - Not yet tried on Discord. In particular, check that picking players from the @ autocomplete in the `players` box sends `<@id>` mentions.
   - Usage and hint texts still show the `!botc` form.
