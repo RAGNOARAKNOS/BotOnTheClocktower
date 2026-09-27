@@ -12,15 +12,14 @@ The detailed plan lives in [roadmap.md](../roadmap.md): architecture, configurat
 
 ## Open questions
 
-Points where the roadmap doesn't match the current code:
-
-- It says to add OBS settings to a `Settings` struct in `config.go`. That struct no longer exists: add them to `config.Config` and pass them to the bot from `main`.
-- It says to gate commands behind a "Storyteller check (same pattern as `register`)". That's no longer needed: every command is already restricted to the Storyteller in the admin channel.
-- Phase 3 hooks into "bedtime" and "wake" commands. The planned `bedtime` command was dropped on 2026-09-27, so nothing marks nightfall. What should trigger the night scene, and is "wake" the same as `gather`?
+- Phase 3 changes scene at nightfall and daybreak. The planned `bedtime` command was dropped on 2026-09-27, so nothing marks nightfall. What should trigger the night scene, and is daybreak `gather`'s move?
 
 ## Decisions
 
-- (none yet)
+- 2026-09-27: The bot connects directly to OBS's WebSocket server (obs-websocket v5, through `goobs`). No OBS traffic goes through Discord's API; Discord only carries the Storyteller's `!botc obs` commands.
+- 2026-09-27: The bot runs on the same PC as OBS and connects over loopback (`localhost:4455`, or `host.docker.internal:4455` from Docker Desktop). OBS keeps authentication on, and port 4455 isn't opened in the firewall.
+- 2026-09-27: Every `obs` command, `obs ping` included, keeps the default access: Storyteller only, from the admin channel, with a game registered. None runs before a game is registered.
+- 2026-09-27: No OBS call is made while holding `Bot.mu`. A background loop keeps the connection up, and commands never dial; each OBS command makes its call once the lock is released, through `request.after` (see the roadmap's *Keeping OBS calls outside `Bot.mu`*).
 
 ## Implementation
 

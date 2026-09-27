@@ -92,17 +92,15 @@ This section covers the architecture and the rules to keep. For what each comman
 
 `docs/roadmap.md` plans OBS control through obs-websocket v5, using `github.com/andreykaipov/goobs`. None of it is built yet. The plan:
 
-- A new `internal/obs` package (`client.go` for the connection and reconnects, `actions.go` for scenes, sources, audio and recording) that must never import `internal/bot`. `Bot` gets an `*obs.Client` field.
-- New env vars `OBS_HOST` (default `localhost:4455`), `OBS_PASSWORD`, `OBS_ENABLED` (default `false`), and later `OBS_SCENE_*` and `OBS_ROSTER_SOURCE`. The roadmap also plans a `.env.example` file.
-- Commands live under `!botc obs ...` (`ping`, `scene`, `scenes`, `current`, `mute`/`unmute`, `show`/`hide`, `record start|stop|status`).
+- The bot runs on the same PC as OBS and dials obs-websocket directly (`localhost:4455`); no OBS traffic goes through Discord's API.
+- A new `internal/obs` package (`client.go` for the connection and reconnects, `actions.go` for scenes, sources, audio and recording) that must never import `internal/bot`. `main` builds the client when OBS is enabled and passes it to `bot.Run`; `Bot` holds it behind a small interface, so tests can fake it.
+- New env vars `OBS_HOST` (default `localhost:4455`), `OBS_PASSWORD`, `OBS_ENABLED` (default `false`), read into `config.Config`, and later `OBS_SCENE_*` and `OBS_ROSTER_SOURCE`. Never log `OBS_PASSWORD`. The roadmap also plans a `.env.example` file.
+- Commands live under `!botc obs ...` (`ping`, `scene`, `scenes`, `current`, `mute`/`unmute`, `show`/`hide`, `record start|stop|status`), with the default access.
+- OBS calls never run under `Bot.mu`. A background loop keeps the connection up and commands never dial; an OBS command makes its call once the lock is released, through a planned `request.after` (see the roadmap's *Keeping OBS calls outside `Bot.mu`*).
 - OBS is optional. If it's missing, OBS commands log a warning and do nothing, and Discord commands keep working. OBS errors must never crash the bot. Reconnects use exponential backoff (1s doubling, capped at 30s).
 - Phases run in order: 1 connect + `obs ping`, 2 scene commands, 3 automatic scene changes on game phase, 4 source/audio/roster overlay, 5 recording.
 
-Where the roadmap doesn't match the current code:
-
-- It says "add OBS config fields to Settings in config.go"; there's no `Settings` any more. Add them to `config.Config` and pass them to the bot from `main`.
-- It says to gate commands behind a "Storyteller check (same pattern as `register`)". No per-command check is needed: an `obs` entry in the `commands` table is Storyteller-only, from the admin channel, by default.
-- Phase 3 hooks into night and day phase changes. `gather` could mark daybreak, but no command marks nightfall (the planned `bedtime` command was dropped).
+Still undecided: phase 3 changes scene at nightfall and daybreak. `gather` could mark daybreak, but no command marks nightfall (the planned `bedtime` command was dropped).
 
 ## CI/CD
 
