@@ -8,23 +8,42 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-// command is one `!botc <name>` command. By default a command only runs while a game
-// is registered, for the Storyteller, in the admin channel; the flags relax that.
+// request is one command, from a `!botc` message or a `/botc` slash command, in a
+// form the handlers can use without knowing which.
+type request struct {
+	authorID, guildID, channelID string
+	// words is the command as words: "!botc" (or "/botc"), the command name, then its arguments.
+	words []string
+	// content is the raw command text, for the commands that parse free text (parse.go).
+	content string
+	// mentions are the users the command names.
+	mentions []*discordgo.User
+	// reply answers the command: a threaded reply to a message, or the slash command's
+	// response, visible only to the sender. say is the same, but not threaded.
+	reply func(text string)
+	say   func(text string)
+}
+
+// command is one `!botc <name>` / `/botc <name>` command. By default a command only
+// runs while a game is registered, for the Storyteller, in the admin channel; the flags relax that.
 type command struct {
-	run func(b *Bot, message *discordgo.MessageCreate, words []string)
+	run func(b *Bot, req *request)
 	// beforeGame lets anyone run the command, from any channel, while no game is registered.
 	beforeGame bool
 	// anyChannel lets the Storyteller run the command outside the admin channel.
 	anyChannel bool
+	// alias marks another name for a command listed under its own name. Aliases work
+	// as `!botc` words only; slash commands have just the main name.
+	alias bool
 }
 
 // commands maps each command name, and each alias, to its command.
 var commands = map[string]command{
 	"ping":       {run: (*Bot).ping, beforeGame: true, anyChannel: true},
 	"register":   {run: (*Bot).register, beforeGame: true},
-	"start":      {run: (*Bot).register, beforeGame: true},
+	"start":      {run: (*Bot).register, beforeGame: true, alias: true},
 	"unregister": {run: (*Bot).unregister},
-	"end":        {run: (*Bot).unregister},
+	"end":        {run: (*Bot).unregister, alias: true},
 	"sitrep":     {run: (*Bot).sitrep},
 	"map":        {run: (*Bot).mapCommand},
 	"village":    {run: (*Bot).village},
@@ -35,25 +54,41 @@ var commands = map[string]command{
 }
 
 // extractCommand runs the command named by the second word, if the sender may run it.
-func (b *Bot) extractCommand(message *discordgo.MessageCreate, words []string) {
-	name := strings.ToLower(words[1])
+// It returns false if the command was ignored without a reply.
+func (b *Bot) extractCommand(req *request) (answered bool) {
+	name := strings.ToLower(req.words[1])
 	cmd, known := commands[name]
 
-	ok, refusal := allowed(b.game, cmd, message.Author.ID, message.GuildID, message.ChannelID)
+	ok, refusal := allowed(b.game, cmd, req.authorID, req.guildID, req.channelID)
 	if !ok {
 		if refusal == "" {
 			log.Printf("Ignoring %q: no game registered", name)
-		} else {
-			b.reply(message, refusal)
+			return false
 		}
-		return
+		req.reply(refusal)
+		return true
 	}
 
 	if !known {
-		b.send(message.ChannelID, "Huh? WTF is that command?!")
+		req.say("Huh? WTF is that command?!")
+		return true
+	}
+	cmd.run(b, req)
+	return true
+}
+
+// dispatch runs the subcommand named by the third word from subcommands, or replies with usage.
+func (b *Bot) dispatch(req *request, subcommands map[string]func(b *Bot, req *request), usage string) {
+	if len(req.words) < 3 {
+		req.reply(usage)
 		return
 	}
-	cmd.run(b, message, words)
+	run, ok := subcommands[strings.ToLower(req.words[2])]
+	if !ok {
+		req.reply(usage)
+		return
+	}
+	run(b, req)
 }
 
 // allowed decides whether a command may run. With no game registered, only commands
@@ -77,8 +112,8 @@ func allowed(game *Game, cmd command, authorID, guildID, channelID string) (ok b
 }
 
 // ping lets anyone check the bot is online and reading commands.
-func (b *Bot) ping(message *discordgo.MessageCreate, _ []string) {
-	b.send(message.ChannelID, "pong")
+func (b *Bot) ping(req *request) {
+	req.say("pong")
 }
 
 // reply answers a command as a threaded reply in the channel it came from.

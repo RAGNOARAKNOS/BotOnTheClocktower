@@ -19,7 +19,7 @@ flowchart TD
     newS --> d2{" "}
     d2 -->|"[error]"| fatal
     d2 -->|"[session created]"| intents("Request all gateway intents")
-    intents --> handlers("Register handlers:<br/>Ready and newMessage")
+    intents --> handlers("Register handlers: Ready, newMessage,<br/>interaction and registerSlashCommands")
     handlers --> open("Open the gateway connection")
     open --> d3{" "}
     d3 -->|"[error, e.g. bad token or intents not enabled]"| fatal
@@ -51,14 +51,19 @@ sequenceDiagram
     Main->>+Bot: Run(cfg.Token)
     Bot->>Session: discordgo.New("Bot " + token)
     Bot->>Session: Identify.Intents = IntentsAll
-    Bot->>Session: AddHandler(Ready), AddHandler(newMessage)
+    Bot->>Session: AddHandler for Ready, newMessage, interaction, registerSlashCommands
     Bot->>+Session: Open()
     Session->>Gateway: Connect and identify (token, intents)
     Gateway-->>Session: Ready event
     Session-)Bot: Ready handler logs "Bot is ready"
+    loop each server the bot is in, and any it joins later
+        Gateway-->>Session: GuildCreate event
+        Session-)Bot: registerSlashCommands
+        Bot->>Gateway: ApplicationCommandBulkOverwrite(app, server, /botc), over REST
+    end
     Session-->>-Bot: nil
     Note over Bot: Blocks on the stop channel
-    Note over Gateway,Bot: Commands arrive as MessageCreate events (see command-dispatch.md)
+    Note over Gateway,Bot: Commands arrive as MessageCreate or InteractionCreate events (see command-dispatch.md)
     OS-)Bot: SIGINT or SIGTERM (e.g. Ctrl+C)
     Bot->>Session: Close() (deferred)
     Session->>Gateway: Disconnect
@@ -68,4 +73,4 @@ sequenceDiagram
 
 ---
 
-Last checked against code: 2026-09-27 (6d82bd7)
+Last checked against code: 2026-09-27 (b1fa7f3)

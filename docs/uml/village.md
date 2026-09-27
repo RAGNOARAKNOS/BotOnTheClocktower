@@ -6,7 +6,7 @@ The village is the list of players in the game (`Game.Players`, user ID → disp
 
 ## Activity: `village` dispatch
 
-Like every command, `village` only runs for the Storyteller in the admin channel; [`allowed`](command-dispatch.md#activity-allowed) checks that before `village` is called.
+Like every command, `village` only runs for the Storyteller in the admin channel; [`allowed`](command-dispatch.md#activity-allowed) checks that before `village` is called. `dispatch` looks the subcommand up in the `villageCommands` table (`character` does the same with `characterCommands`).
 
 ```mermaid
 flowchart TD
@@ -132,4 +132,4 @@ flowchart TD
 
 ---
 
-Last checked against code: 2026-09-27 (4bef1c8)
+Last checked against code: 2026-09-27 (b1fa7f3)

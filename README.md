@@ -37,7 +37,7 @@ These steps need someone with the **Manage Server** and **Manage Roles** permiss
 
 #### 1. Invite the bot with these permissions
 
-In the developer portal, open **OAuth2 → URL Generator**, tick the `bot` scope, then tick these permissions and use the generated link to invite the bot:
+In the developer portal, open **OAuth2 → URL Generator**, tick the `bot` and `applications.commands` scopes, then tick these permissions and use the generated link to invite the bot. `applications.commands` lets the bot add its `/botc` slash command; a bot invited without it still answers `!botc`, and can be re-invited with the same link to add it:
 
 | Permission | Why the bot needs it |
 | --- | --- |
@@ -188,6 +188,14 @@ triggers the container image build and push.
 ## Commands
 
 Every command starts with `!botc`, followed by the command name, e.g. `!botc ping`. Capitals don't matter (`!BotC Start` works). Messages from other bots are ignored.
+
+Every command also works as a Discord slash command, `/botc`, with the same access rules and results:
+
+- Subcommands match the `!botc` commands, e.g. `/botc sitrep`, `/botc village add players:@Alice @Bob`, `/botc gather minutes:5` or `/botc gather cancel:True`. The aliases `start` and `end` are `!botc` only.
+- Where a command takes several players, type their @mentions into the `players` box.
+- `/botc whisper player:@x` and `/botc character assign player:@x` open a form, so the whisper or the character's guidance can span several lines.
+- Slash replies, including refusals, are only visible to whoever ran the command. Announcements, DMs and `gather`'s TTS messages go out as usual.
+- With no game registered, slash commands other than `register` and `ping` get a private "No game registered" reply rather than being ignored.
 
 Commands only work from the admin channel, and only for the Storyteller:
 
@@ -370,6 +378,6 @@ Keeping them current:
 
 ### Anatomy of a command
 
-Messages are split into words with [`strings.Fields`](https://pkg.go.dev/strings#Fields). If the first word is `!botc` (ignoring case) and there is at least one more word, the second word is the command name, dispatched in `extractCommand` in [internal/bot/commands.go](internal/bot/commands.go). Any further words are available as arguments. [command-dispatch.md](docs/uml/command-dispatch.md) shows the whole flow.
+Messages are split into words with [`strings.Fields`](https://pkg.go.dev/strings#Fields). If the first word is `!botc` (ignoring case) and there is at least one more word, the second word is the command name, dispatched in `extractCommand` in [internal/bot/commands.go](internal/bot/commands.go). Any further words are available as arguments. Handlers receive a `request`, which `newMessage` builds from a message and `interaction` builds from a `/botc` slash command ([internal/bot/interactions.go](internal/bot/interactions.go)), turning its options into the same words. [command-dispatch.md](docs/uml/command-dispatch.md) shows the whole flow.
 
 <https://www.educative.io/answers/how-to-split-a-string-in-golang>

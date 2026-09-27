@@ -3,15 +3,13 @@ package bot
 import (
 	"fmt"
 	"strings"
-
-	"github.com/bwmarrin/discordgo"
 )
 
 // characterList replies with the grimoire: every village player's character,
 // team, life state and whether it has been sent, with totals at the top.
-func (b *Bot) characterList(message *discordgo.MessageCreate, _ []string) {
+func (b *Bot) characterList(req *request) {
 	if len(b.game.Players) == 0 {
-		b.reply(message, "The village is empty. Use `!botc village create` first.")
+		req.reply("The village is empty. Use `!botc village create` first.")
 		return
 	}
 
@@ -27,7 +25,7 @@ func (b *Bot) characterList(message *discordgo.MessageCreate, _ []string) {
 	}
 
 	for _, chunk := range chunkLines(lines, maxMessageLength) {
-		b.reply(message, chunk)
+		req.reply(chunk)
 	}
 }
 

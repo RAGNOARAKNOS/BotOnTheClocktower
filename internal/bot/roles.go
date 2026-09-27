@@ -4,8 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-
-	"github.com/bwmarrin/discordgo"
 )
 
 // Discord roles the server must already have. The bot looks them up by exact name.
@@ -71,12 +69,12 @@ func (b *Bot) setPlayerRole(add, remove map[string]string) error {
 }
 
 // replyWithRoleWarning sends reply, adding a warning if the player role couldn't be updated.
-func (b *Bot) replyWithRoleWarning(message *discordgo.MessageCreate, reply string, roleErr error) {
+func (b *Bot) replyWithRoleWarning(req *request, reply string, roleErr error) {
 	if roleErr != nil {
 		log.Printf("Problems updating the %s role: %v", playerRoleName, roleErr)
 		reply += fmt.Sprintf("\nWarning: the %q role could not be fully updated (%v). Check the role exists and sits below the bot's role.", playerRoleName, roleErr)
 	}
-	b.reply(message, reply)
+	req.reply(reply)
 }
 
 // removeGameRoles takes the Storyteller and Player roles off every member of the

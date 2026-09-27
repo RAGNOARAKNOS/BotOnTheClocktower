@@ -36,6 +36,8 @@ func Run(token string) error {
 		log.Println("Bot is ready")
 	})
 	discord.AddHandler(b.newMessage)
+	discord.AddHandler(b.interaction)
+	discord.AddHandler(b.registerSlashCommands)
 
 	if err := discord.Open(); err != nil {
 		return err
@@ -72,5 +74,19 @@ func (b *Bot) newMessage(discord *discordgo.Session, message *discordgo.MessageC
 		}
 	}()
 
-	b.extractCommand(message, msgContents)
+	b.extractCommand(b.messageRequest(message, msgContents))
+}
+
+// messageRequest turns a `!botc` message into a request. Replies are threaded to the message.
+func (b *Bot) messageRequest(message *discordgo.MessageCreate, words []string) *request {
+	return &request{
+		authorID:  message.Author.ID,
+		guildID:   message.GuildID,
+		channelID: message.ChannelID,
+		words:     words,
+		content:   message.Content,
+		mentions:  message.Mentions,
+		reply:     func(text string) { b.reply(message, text) },
+		say:       func(text string) { b.send(message.ChannelID, text) },
+	}
 }

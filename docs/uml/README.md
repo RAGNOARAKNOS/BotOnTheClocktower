@@ -11,7 +11,7 @@ All diagrams are written in [Mermaid](https://mermaid.js.org/), which GitHub ren
 | File | Activity diagrams | Sequence diagrams |
 | --- | --- | --- |
 | [startup.md](startup.md) | Startup and shutdown | Startup and shutdown |
-| [command-dispatch.md](command-dispatch.md) | Handling a message, `allowed` | Handling a message |
+| [command-dispatch.md](command-dispatch.md) | Handling a message, handling a slash command, `allowed` | Handling a message, handling a slash command, a command with a form |
 | [game-lifecycle.md](game-lifecycle.md) | `register`, `unregister` | `register`, `unregister`, `map`, `sitrep` |
 | [village.md](village.md) | `village` dispatch, `create`, `add`, `remove` | `village create` |
 | [characters.md](characters.md) | `character assign`, `kill`/`revive`, `ghostvote`, `team`, `announce` | `announce`, `send`, `grimoire`, `whisper` |
@@ -60,16 +60,18 @@ Which diagram covers which code. When you change one of these functions, update 
 | Code | Diagram |
 | --- | --- |
 | `cmd/bot/main.go` `main`, `config.Load`, `bot.Run` | [startup.md](startup.md) |
-| `newMessage`, `extractCommand`, `commands` | [command-dispatch.md](command-dispatch.md) |
+| `newMessage`, `messageRequest`, `extractCommand`, `dispatch`, `commands`, `request` | [command-dispatch.md](command-dispatch.md) |
+| `interaction`, `slashCommand`, `modalSubmit`, `runSlash`, `slashRequest`, `slashResponder`, `resolveUsers`, `slashWords`, `slashOptions`, `modalCommand`, `modalFields`, `whisperModal`, `assignModal` | [command-dispatch.md](command-dispatch.md) |
+| `registerSlashCommands`, `slashCommands` | [startup.md](startup.md) |
 | `allowed` | [command-dispatch.md](command-dispatch.md) |
 | `mapCommand` | [game-lifecycle.md](game-lifecycle.md) |
 | `register`, `newGame`, `findVoiceChannelID`, `assignStorytellerRole`, `findRoleID`, `channelAccessWarning` | [game-lifecycle.md](game-lifecycle.md) |
 | `unregister`, `removeGameRoles` | [game-lifecycle.md](game-lifecycle.md) |
 | `mapRooms`, `getMapGuildChannels`, `villageCodeLookup` | [game-lifecycle.md](game-lifecycle.md) |
 | `sitrep` | [game-lifecycle.md](game-lifecycle.md) |
-| `village`, `villageCreate`, `villageAdd`, `villageRemove`, `Game.ReplacePlayers`, `Game.RemovePlayer` | [village.md](village.md) |
+| `village`, `villageCommands`, `villageCreate`, `villageAdd`, `villageRemove`, `Game.ReplacePlayers`, `Game.RemovePlayer` | [village.md](village.md) |
 | `setPlayerRole`, `replyWithRoleWarning`, `lookupMember`, `memberDisplayName` | [village.md](village.md) |
-| `character`, `characterAssign`, `parseAssignment`, `splitAtMention`, `splitTeam`, `parseTeam`, `teamWordNames` | [characters.md](characters.md) |
+| `character`, `characterCommands`, `characterAssign`, `parseAssignment`, `splitAtMention`, `splitTeam`, `parseTeam`, `teamWordNames` | [characters.md](characters.md) |
 | `characterSetAlive`, `characterGhostVote`, `characterTeam`, `mentionedCharacters`, `Game.Assign`, `Game.SetAlive`, `Game.ToggleGhostVote`, `Game.SetTeam` | [characters.md](characters.md) |
 | `characterAnnounce`, `pendingLifeChanges`, `Game.PendingLifeChanges`, `Game.MarkAnnounced` | [characters.md](characters.md) |
 | `characterSend`, `sendDM`, `dmEmbed`, `dmErrorReason` | [characters.md](characters.md) |
@@ -81,7 +83,7 @@ Which diagram covers which code. When you change one of these functions, update 
 
 - `villageList`, `characterClear`: a single loop and a reply.
 - `sortedNames`, `sortedPlayerIDs`, `playerName`, `ghostVoteState`, `formatCountdown`, `plural`, `failureList`: formatting helpers.
-- `reply`, `send`: send a message and log any failure. `missingPermissions`, `isVillageRoom`, `botUserID`: small helpers for `channelAccessWarning`. `ping`: sends `pong`.
+- `reply`, `send`: send a message and log any failure. `orNoGame`, `stringOption`, `mentionIDsIn`, `truncate`, and the slash option builders (`slashOption`, `subcommand` and the like): small helpers. `missingPermissions`, `isVillageRoom`, `botUserID`: small helpers for `channelAccessWarning`. `ping`: sends `pong`.
 
 ## Keeping the diagrams up to date
 

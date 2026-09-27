@@ -8,8 +8,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/bwmarrin/discordgo"
 )
 
 const (
@@ -78,21 +76,21 @@ func plural(n int, unit string) string {
 }
 
 // gather starts a countdown to move the players to Town Square, or cancels one.
-func (b *Bot) gather(message *discordgo.MessageCreate, words []string) {
-	d, cancel, err := parseGather(words)
+func (b *Bot) gather(req *request) {
+	d, cancel, err := parseGather(req.words)
 	if err != nil {
-		b.reply(message, fmt.Sprintf("Could not read that (%v). %s", err, gatherUsage))
+		req.reply(fmt.Sprintf("Could not read that (%v). %s", err, gatherUsage))
 		return
 	}
 	if cancel {
-		b.gatherCancel(message)
+		b.gatherCancel(req)
 		return
 	}
 
 	game := b.game
 	if game.gather != nil {
 		left := time.Until(game.gather.ends).Round(time.Second)
-		b.reply(message, fmt.Sprintf("A gathering is already counting down, with %s left. Use `!botc gather cancel` to stop it. This command will not execute", formatCountdown(left)))
+		req.reply(fmt.Sprintf("A gathering is already counting down, with %s left. Use `!botc gather cancel` to stop it. This command will not execute", formatCountdown(left)))
 		return
 	}
 
@@ -106,19 +104,19 @@ func (b *Bot) gather(message *discordgo.MessageCreate, words []string) {
 	if len(game.Rooms) == 0 {
 		reply += " Only Town Square was told: run `!botc map` so the other rooms hear it too."
 	}
-	b.reply(message, reply+failureList(failures))
+	req.reply(reply + failureList(failures))
 }
 
 // gatherCancel stops the running countdown and tells everyone it's off.
-func (b *Bot) gatherCancel(message *discordgo.MessageCreate) {
+func (b *Bot) gatherCancel(req *request) {
 	if b.game.gather == nil {
-		b.reply(message, "No gathering is counting down.")
+		req.reply("No gathering is counting down.")
 		return
 	}
 	b.game.gather.stop()
 	b.game.gather = nil
 	failures := b.gatherAnnounce("The Storyteller has called off the gathering in Town Square.")
-	b.reply(message, "Gathering cancelled."+failureList(failures))
+	req.reply("Gathering cancelled." + failureList(failures))
 }
 
 // gatherFire runs a countdown step from its timer. It holds Bot.mu like a command,

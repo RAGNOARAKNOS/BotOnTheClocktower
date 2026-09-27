@@ -9,26 +9,26 @@ import (
 )
 
 // whisper DMs a village player a secret message from the Storyteller straight away.
-func (b *Bot) whisper(message *discordgo.MessageCreate, _ []string) {
-	userID, text, err := parseWhisper(message.Content)
+func (b *Bot) whisper(req *request) {
+	userID, text, err := parseWhisper(req.content)
 	if err != nil {
-		b.reply(message, fmt.Sprintf("Could not read that (%v). %s", err, whisperUsage))
+		req.reply(fmt.Sprintf("Could not read that (%v). %s", err, whisperUsage))
 		return
 	}
 
 	playerName, ok := b.game.Players[userID]
 	if !ok {
-		b.reply(message, fmt.Sprintf("<@%s> isn't in the village. This command will not execute", userID))
+		req.reply(fmt.Sprintf("<@%s> isn't in the village. This command will not execute", userID))
 		return
 	}
 
 	if err := b.sendDM(userID, b.dmEmbed("A message from the Storyteller", text)); err != nil {
 		log.Printf("Could not whisper to %s: %v", userID, err)
-		b.reply(message, fmt.Sprintf("Could not whisper to %s (%s).", playerName, dmErrorReason(err)))
+		req.reply(fmt.Sprintf("Could not whisper to %s (%s).", playerName, dmErrorReason(err)))
 		return
 	}
 
-	b.reply(message, fmt.Sprintf("Whispered to %s.", playerName))
+	req.reply(fmt.Sprintf("Whispered to %s.", playerName))
 }
 
 // sendDM sends an embed to the user in a direct message.

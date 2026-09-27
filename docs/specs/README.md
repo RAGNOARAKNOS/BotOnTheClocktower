@@ -28,6 +28,7 @@ Status values: **IDEA** (not yet shaped) â†’ **PLANNED** (agreed, not started) â
 | [village-management.md](village-management.md) | `!botc village ...` | DONE (untested on Discord) |
 | [characters.md](characters.md) | `!botc character ...`, `!botc whisper` | DONE (untested on Discord) |
 | [gather.md](gather.md) | `!botc gather` | DONE (untested on Discord) |
+| [slash-commands.md](slash-commands.md) | `/botc ...` | DONE (untested on Discord) |
 
 ### Planned and ideas
 

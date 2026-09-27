@@ -10,34 +10,26 @@ import (
 
 const villageUsage = "Usage: `!botc village create`, `!botc village add @player...`, `!botc village remove @player...`, `!botc village list`"
 
-// village dispatches the village subcommands.
-func (b *Bot) village(message *discordgo.MessageCreate, rawText []string) {
-	if len(rawText) < 3 {
-		b.reply(message, villageUsage)
-		return
-	}
+// villageCommands maps each village subcommand to its handler.
+var villageCommands = map[string]func(b *Bot, req *request){
+	"create": (*Bot).villageCreate,
+	"add":    (*Bot).villageAdd,
+	"remove": (*Bot).villageRemove,
+	"list":   (*Bot).villageList,
+}
 
-	switch strings.ToLower(rawText[2]) {
-	case "create":
-		b.villageCreate(message)
-	case "add":
-		b.villageAdd(message)
-	case "remove":
-		b.villageRemove(message)
-	case "list":
-		b.villageList(message)
-	default:
-		b.reply(message, villageUsage)
-	}
+// village dispatches the village subcommands.
+func (b *Bot) village(req *request) {
+	b.dispatch(req, villageCommands, villageUsage)
 }
 
 // villageCreate replaces the player list with everyone in Town Square voice,
 // except the Storyteller and bots, and makes BoTC-Player match the new list.
-func (b *Bot) villageCreate(message *discordgo.MessageCreate) {
+func (b *Bot) villageCreate(req *request) {
 	guild, err := b.discord.State.Guild(b.game.GuildID)
 	if err != nil {
 		reply := fmt.Sprintf("Could not read who is in <#%s> (%v). This command will not execute", b.game.GameChannelID, err)
-		b.reply(message, reply)
+		req.reply(reply)
 		return
 	}
 
@@ -77,19 +69,19 @@ func (b *Bot) villageCreate(message *discordgo.MessageCreate) {
 	if len(dropped) > 0 {
 		reply += fmt.Sprintf("\nNo longer in the village: %s", strings.Join(sortedNames(dropped), ", "))
 	}
-	b.replyWithRoleWarning(message, reply, roleErr)
+	b.replyWithRoleWarning(req, reply, roleErr)
 }
 
 // villageAdd adds each mentioned user to the village and gives them BoTC-Player.
-func (b *Bot) villageAdd(message *discordgo.MessageCreate) {
-	if len(message.Mentions) == 0 {
-		b.reply(message, "Mention the players to add. "+villageUsage)
+func (b *Bot) villageAdd(req *request) {
+	if len(req.mentions) == 0 {
+		req.reply("Mention the players to add. " + villageUsage)
 		return
 	}
 
 	added := make(map[string]string)
 	var skipped []string
-	for _, user := range message.Mentions {
+	for _, user := range req.mentions {
 		switch {
 		case user.Bot:
 			skipped = append(skipped, user.Username+" (bot)")
@@ -114,19 +106,19 @@ func (b *Bot) villageAdd(message *discordgo.MessageCreate) {
 	if len(skipped) > 0 {
 		reply += "\nSkipped: " + strings.Join(skipped, ", ")
 	}
-	b.replyWithRoleWarning(message, reply, roleErr)
+	b.replyWithRoleWarning(req, reply, roleErr)
 }
 
 // villageRemove removes each mentioned user from the village and takes BoTC-Player away.
-func (b *Bot) villageRemove(message *discordgo.MessageCreate) {
-	if len(message.Mentions) == 0 {
-		b.reply(message, "Mention the players to remove. "+villageUsage)
+func (b *Bot) villageRemove(req *request) {
+	if len(req.mentions) == 0 {
+		req.reply("Mention the players to remove. " + villageUsage)
 		return
 	}
 
 	removed := make(map[string]string)
 	var skipped []string
-	for _, user := range message.Mentions {
+	for _, user := range req.mentions {
 		name, ok := b.game.Players[user.ID]
 		if !ok {
 			skipped = append(skipped, user.Username+" (not in the village)")
@@ -147,13 +139,13 @@ func (b *Bot) villageRemove(message *discordgo.MessageCreate) {
 	if len(skipped) > 0 {
 		reply += "\nSkipped: " + strings.Join(skipped, ", ")
 	}
-	b.replyWithRoleWarning(message, reply, roleErr)
+	b.replyWithRoleWarning(req, reply, roleErr)
 }
 
 // villageList replies with the current players, numbered and sorted by name.
-func (b *Bot) villageList(message *discordgo.MessageCreate) {
+func (b *Bot) villageList(req *request) {
 	if len(b.game.Players) == 0 {
-		b.reply(message, "The village is empty. Use `!botc village create` or `!botc village add @player`.")
+		req.reply("The village is empty. Use `!botc village create` or `!botc village add @player`.")
 		return
 	}
 
@@ -162,7 +154,7 @@ func (b *Bot) villageList(message *discordgo.MessageCreate) {
 	for i, name := range sortedNames(b.game.Players) {
 		fmt.Fprintf(&sb, "\n%d. %s", i+1, name)
 	}
-	b.reply(message, sb.String())
+	req.reply(sb.String())
 }
 
 // sortedNames returns the names (values) of an ID-to-name map in alphabetical order.

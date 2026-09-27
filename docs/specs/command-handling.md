@@ -9,6 +9,7 @@ Rules shared by every command: how messages are recognised as commands, and how 
 ## Behaviour
 
 - A command is a message whose first word is `!botc` (any capitalisation) followed by at least one more word. The second word, lowercased, is the command name; further words are arguments.
+- Every command can also be run as a `/botc` slash command, with the same access and results; see [slash-commands.md](slash-commands.md). The rules below apply to both, except where that spec says otherwise.
 - Messages from bots, including this one, are ignored.
 - A message that is just `!botc` with nothing after it is ignored.
 - Commands run one at a time, never concurrently.
@@ -26,7 +27,7 @@ Rules shared by every command: how messages are recognised as commands, and how 
 
 ## Out of scope
 
-- Slash commands (Discord's `/command` UI). Everything is plain-text `!botc`.
+- Slash-command details: see [slash-commands.md](slash-commands.md).
 
 ## Open questions
 
@@ -41,9 +42,10 @@ Rules shared by every command: how messages are recognised as commands, and how 
 - 2026-09-26: Exception for `ping`: anyone can ping while no game is registered, and the Storyteller can ping from any channel once one is.
 - 2026-09-27: The `pmove`/`cmove` stubs are removed; they now get the unknown-command reply. Moving players returns with `gather`.
 - 2026-09-27: Stop printing every command word to the console, as whispers and guidance are secret.
+- 2026-09-27: Commands also work as `/botc` slash commands, permanently and in parity with `!botc` ([slash-commands.md](slash-commands.md)).
 
 ## Implementation
 
-- `newMessage` in [internal/bot/bot.go](../../internal/bot/bot.go). The `commands` table, `extractCommand` and `allowed` (the access check) in [internal/bot/commands.go](../../internal/bot/commands.go).
+- `newMessage` in [internal/bot/bot.go](../../internal/bot/bot.go), and `interaction` for slash commands in [internal/bot/interactions.go](../../internal/bot/interactions.go). Both build a `request`. The `commands` table, `extractCommand` and `allowed` (the access check) in [internal/bot/commands.go](../../internal/bot/commands.go).
 - Each command's table entry sets its access: `beforeGame` (runs for anyone, anywhere, with no game: `register`, `start`, `ping`) and `anyChannel` (the Storyteller can run it anywhere: `ping`). `allowed` is pure and tested in `commands_test.go`.
 - Message content is never logged, because whispers and character guidance are secret. Send failures are logged by the `reply`/`send` helpers.

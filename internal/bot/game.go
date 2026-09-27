@@ -5,8 +5,6 @@ import (
 	"log"
 	"maps"
 	"slices"
-
-	"github.com/bwmarrin/discordgo"
 )
 
 // Game is the state of the registered game. It's held in memory only, so a restart loses it.
@@ -145,22 +143,22 @@ var villageCodeLookup = map[string]string{
 	"SC": "Storyteller's Corner",
 }
 
-func (b *Bot) register(message *discordgo.MessageCreate, _ []string) {
+func (b *Bot) register(req *request) {
 	if b.game != nil {
 		reply := fmt.Sprintf("A game is already registered, with <@%s> as the Storyteller. This command will not execute", b.game.StorytellerID)
-		b.reply(message, reply)
+		req.reply(reply)
 		return
 	}
 
 	townSquareName := villageCodeLookup["TS"]
-	gameChannelID, err := b.findVoiceChannelID(message.GuildID, townSquareName)
+	gameChannelID, err := b.findVoiceChannelID(req.guildID, townSquareName)
 	if err != nil {
 		reply := fmt.Sprintf("Could not find the game channel (%v). Create a voice channel named %q, then try again. This command will not execute", err, townSquareName)
-		b.reply(message, reply)
+		req.reply(reply)
 		return
 	}
 
-	b.game = newGame(message.GuildID, message.ChannelID, gameChannelID, message.Author.ID)
+	b.game = newGame(req.guildID, req.channelID, gameChannelID, req.authorID)
 
 	log.Printf("The game has been registered at %s admin channel %s game channel %s storyteller %s", b.game.GuildID, b.game.AdminChannelID, b.game.GameChannelID, b.game.StorytellerID)
 
@@ -176,12 +174,12 @@ func (b *Bot) register(message *discordgo.MessageCreate, _ []string) {
 		log.Printf("The bot is missing channel permissions: %s", warning)
 		reply += warning
 	}
-	b.reply(message, reply)
+	req.reply(reply)
 }
 
 // unregister ends the current game: it removes the game roles from everyone
 // and forgets the game so a new one can be registered.
-func (b *Bot) unregister(message *discordgo.MessageCreate, _ []string) {
+func (b *Bot) unregister(req *request) {
 	guildID := b.game.GuildID
 
 	removed, roleErr := b.removeGameRoles(guildID)
@@ -200,19 +198,19 @@ func (b *Bot) unregister(message *discordgo.MessageCreate, _ []string) {
 		log.Printf("Problems removing game roles: %v", roleErr)
 		reply += fmt.Sprintf(" Warning: some roles could not be removed (%v). Check the %q and %q roles exist and sit below the bot's role.", roleErr, storytellerRoleName, playerRoleName)
 	}
-	b.reply(message, reply)
+	req.reply(reply)
 }
 
 // sitrep reports where the game is running. It only runs while a game is registered.
-func (b *Bot) sitrep(message *discordgo.MessageCreate, _ []string) {
-	b.send(message.ChannelID, fmt.Sprintf("SITREP-Game is initialised at guildid# %s admin channel <#%s> game channel <#%s> storyteller <@%s>", b.game.GuildID, b.game.AdminChannelID, b.game.GameChannelID, b.game.StorytellerID))
+func (b *Bot) sitrep(req *request) {
+	req.say(fmt.Sprintf("SITREP-Game is initialised at guildid# %s admin channel <#%s> game channel <#%s> storyteller <@%s>", b.game.GuildID, b.game.AdminChannelID, b.game.GameChannelID, b.game.StorytellerID))
 }
 
 // mapCommand runs `!botc map`, replying if the channels couldn't be read.
-func (b *Bot) mapCommand(message *discordgo.MessageCreate, _ []string) {
+func (b *Bot) mapCommand(req *request) {
 	if err := b.mapRooms(); err != nil {
 		log.Printf("Could not map rooms: %v", err)
-		b.reply(message, fmt.Sprintf("Could not map the town's channels (%v)", err))
+		req.reply(fmt.Sprintf("Could not map the town's channels (%v)", err))
 	}
 }
 

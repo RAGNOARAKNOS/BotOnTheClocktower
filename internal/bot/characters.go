@@ -5,8 +5,6 @@ import (
 	"log"
 	"slices"
 	"strings"
-
-	"github.com/bwmarrin/discordgo"
 )
 
 // Team is the side a character plays for.
@@ -47,48 +45,35 @@ const (
 	whisperUsage = "Usage: `!botc whisper @player <text>` (the text can span several lines)"
 )
 
-// character dispatches the character subcommands.
-func (b *Bot) character(message *discordgo.MessageCreate, rawText []string) {
-	if len(rawText) < 3 {
-		b.reply(message, characterUsage)
-		return
-	}
+// characterCommands maps each character subcommand to its handler.
+var characterCommands = map[string]func(b *Bot, req *request){
+	"assign":    (*Bot).characterAssign,
+	"team":      (*Bot).characterTeam,
+	"kill":      func(b *Bot, req *request) { b.characterSetAlive(req, false) },
+	"revive":    func(b *Bot, req *request) { b.characterSetAlive(req, true) },
+	"ghostvote": (*Bot).characterGhostVote,
+	"announce":  (*Bot).characterAnnounce,
+	"clear":     (*Bot).characterClear,
+	"list":      (*Bot).characterList,
+	"send":      (*Bot).characterSend,
+}
 
-	switch strings.ToLower(rawText[2]) {
-	case "assign":
-		b.characterAssign(message)
-	case "team":
-		b.characterTeam(message, rawText)
-	case "kill":
-		b.characterSetAlive(message, false)
-	case "revive":
-		b.characterSetAlive(message, true)
-	case "ghostvote":
-		b.characterGhostVote(message)
-	case "announce":
-		b.characterAnnounce(message)
-	case "clear":
-		b.characterClear(message)
-	case "list":
-		b.characterList(message, nil)
-	case "send":
-		b.characterSend(message)
-	default:
-		b.reply(message, characterUsage)
-	}
+// character dispatches the character subcommands.
+func (b *Bot) character(req *request) {
+	b.dispatch(req, characterCommands, characterUsage)
 }
 
 // characterAssign stores (or replaces) a player's character. It isn't sent until `character send`.
-func (b *Bot) characterAssign(message *discordgo.MessageCreate) {
-	userID, team, name, guidance, err := parseAssignment(message.Content)
+func (b *Bot) characterAssign(req *request) {
+	userID, team, name, guidance, err := parseAssignment(req.content)
 	if err != nil {
-		b.reply(message, fmt.Sprintf("Could not read that (%v). %s", err, characterUsage))
+		req.reply(fmt.Sprintf("Could not read that (%v). %s", err, characterUsage))
 		return
 	}
 
 	playerName, ok := b.game.Players[userID]
 	if !ok {
-		b.reply(message, fmt.Sprintf("<@%s> isn't in the village. Add them with `!botc village add` first.", userID))
+		req.reply(fmt.Sprintf("<@%s> isn't in the village. Add them with `!botc village add` first.", userID))
 		return
 	}
 
@@ -103,23 +88,23 @@ func (b *Bot) characterAssign(message *discordgo.MessageCreate) {
 		reply += fmt.Sprintf(" This replaces %s.", previous.Name)
 	}
 	reply += " Not sent yet; use `!botc character send`."
-	b.reply(message, reply)
+	req.reply(reply)
 }
 
 // characterTeam moves the mentioned players' characters to another team and marks them unsent.
-func (b *Bot) characterTeam(message *discordgo.MessageCreate, rawText []string) {
+func (b *Bot) characterTeam(req *request) {
 	var team Team
-	for _, word := range rawText[3:] {
+	for _, word := range req.words[3:] {
 		if t, ok := parseTeam(word); ok {
 			team = t
 		}
 	}
-	if team == "" || len(message.Mentions) == 0 {
-		b.reply(message, "Mention the players and give the team, e.g. `!botc character team @player evil`.")
+	if team == "" || len(req.mentions) == 0 {
+		req.reply("Mention the players and give the team, e.g. `!botc character team @player evil`.")
 		return
 	}
 
-	ids, skipped := b.mentionedCharacters(message)
+	ids, skipped := b.mentionedCharacters(req)
 	var changed []string
 	for _, id := range ids {
 		if !b.game.SetTeam(id, team) {
@@ -136,14 +121,14 @@ func (b *Bot) characterTeam(message *discordgo.MessageCreate, rawText []string) 
 	if len(skipped) > 0 {
 		reply += "\nSkipped: " + strings.Join(skipped, ", ")
 	}
-	b.reply(message, reply)
+	req.reply(reply)
 }
 
 // characterSetAlive kills or revives the mentioned players. Nothing is posted
 // publicly until `character announce`.
-func (b *Bot) characterSetAlive(message *discordgo.MessageCreate, alive bool) {
-	if len(message.Mentions) == 0 {
-		b.reply(message, "Mention the players. "+characterUsage)
+func (b *Bot) characterSetAlive(req *request, alive bool) {
+	if len(req.mentions) == 0 {
+		req.reply("Mention the players. " + characterUsage)
 		return
 	}
 
@@ -152,7 +137,7 @@ func (b *Bot) characterSetAlive(message *discordgo.MessageCreate, alive bool) {
 		state = "alive"
 	}
 
-	ids, skipped := b.mentionedCharacters(message)
+	ids, skipped := b.mentionedCharacters(req)
 	var changed []string
 	for _, id := range ids {
 		if !b.game.SetAlive(id, alive) {
@@ -176,17 +161,17 @@ func (b *Bot) characterSetAlive(message *discordgo.MessageCreate, alive bool) {
 	} else {
 		reply += "\nNothing is waiting to be announced."
 	}
-	b.reply(message, reply)
+	req.reply(reply)
 }
 
 // characterGhostVote switches the mentioned dead players' ghost votes between used and available.
-func (b *Bot) characterGhostVote(message *discordgo.MessageCreate) {
-	if len(message.Mentions) == 0 {
-		b.reply(message, "Mention the dead players whose ghost vote to change. "+characterUsage)
+func (b *Bot) characterGhostVote(req *request) {
+	if len(req.mentions) == 0 {
+		req.reply("Mention the dead players whose ghost vote to change. " + characterUsage)
 		return
 	}
 
-	ids, skipped := b.mentionedCharacters(message)
+	ids, skipped := b.mentionedCharacters(req)
 	var changed []string
 	for _, id := range ids {
 		if !b.game.ToggleGhostVote(id) {
@@ -203,15 +188,15 @@ func (b *Bot) characterGhostVote(message *discordgo.MessageCreate) {
 	if len(skipped) > 0 {
 		reply += "\nSkipped: " + strings.Join(skipped, ", ")
 	}
-	b.reply(message, reply)
+	req.reply(reply)
 }
 
 // characterAnnounce posts the deaths and revivals since the last announcement in
 // the game channel, then marks them announced.
-func (b *Bot) characterAnnounce(message *discordgo.MessageCreate) {
+func (b *Bot) characterAnnounce(req *request) {
 	died, revived := b.game.PendingLifeChanges()
 	if len(died)+len(revived) == 0 {
-		b.reply(message, "Nothing to announce: no deaths or revivals since the last announcement.")
+		req.reply("Nothing to announce: no deaths or revivals since the last announcement.")
 		return
 	}
 
@@ -226,23 +211,23 @@ func (b *Bot) characterAnnounce(message *discordgo.MessageCreate) {
 
 	if _, err := b.discord.ChannelMessageSend(b.game.GameChannelID, announcement); err != nil {
 		log.Printf("Could not post the announcement: %v", err)
-		b.reply(message, fmt.Sprintf("Could not post in <#%s> (%v). Nothing was marked as announced.", b.game.GameChannelID, err))
+		req.reply(fmt.Sprintf("Could not post in <#%s> (%v). Nothing was marked as announced.", b.game.GameChannelID, err))
 		return
 	}
 
 	b.game.MarkAnnounced()
-	b.reply(message, fmt.Sprintf("Announced in <#%s>:\n%s", b.game.GameChannelID, announcement))
+	req.reply(fmt.Sprintf("Announced in <#%s>:\n%s", b.game.GameChannelID, announcement))
 }
 
 // characterClear removes the stored characters of the mentioned players.
-func (b *Bot) characterClear(message *discordgo.MessageCreate) {
-	if len(message.Mentions) == 0 {
-		b.reply(message, "Mention the players to clear. "+characterUsage)
+func (b *Bot) characterClear(req *request) {
+	if len(req.mentions) == 0 {
+		req.reply("Mention the players to clear. " + characterUsage)
 		return
 	}
 
 	var cleared, skipped []string
-	for _, user := range message.Mentions {
+	for _, user := range req.mentions {
 		if _, ok := b.game.Characters[user.ID]; !ok {
 			skipped = append(skipped, user.Username)
 			continue
@@ -258,7 +243,7 @@ func (b *Bot) characterClear(message *discordgo.MessageCreate) {
 	if len(skipped) > 0 {
 		reply += "\nNo character to clear: " + strings.Join(skipped, ", ")
 	}
-	b.reply(message, reply)
+	req.reply(reply)
 }
 
 // pendingLifeChanges returns the names of village players who have died or
@@ -282,8 +267,8 @@ func pendingLifeChanges(players map[string]string, chars map[string]*Character) 
 
 // mentionedCharacters returns the IDs of the mentioned players who have a
 // character, in mention order, and a note for each mention without one.
-func (b *Bot) mentionedCharacters(message *discordgo.MessageCreate) (ids, skipped []string) {
-	for _, user := range message.Mentions {
+func (b *Bot) mentionedCharacters(req *request) (ids, skipped []string) {
+	for _, user := range req.mentions {
 		if _, ok := b.game.Characters[user.ID]; ok {
 			ids = append(ids, user.ID)
 		} else {
@@ -295,10 +280,10 @@ func (b *Bot) mentionedCharacters(message *discordgo.MessageCreate) (ids, skippe
 
 // characterSend DMs every unsent character, or, when players are mentioned,
 // resends to just those players.
-func (b *Bot) characterSend(message *discordgo.MessageCreate) {
+func (b *Bot) characterSend(req *request) {
 	var targets, skipped []string
-	if len(message.Mentions) > 0 {
-		for _, user := range message.Mentions {
+	if len(req.mentions) > 0 {
+		for _, user := range req.mentions {
 			if _, ok := b.game.Characters[user.ID]; ok {
 				targets = append(targets, user.ID)
 			} else {
@@ -352,7 +337,7 @@ func (b *Bot) characterSend(message *discordgo.MessageCreate) {
 	if len(missing) > 0 {
 		reply += "\nVillage players with no character yet: " + strings.Join(missing, ", ")
 	}
-	b.reply(message, reply)
+	req.reply(reply)
 }
 
 // playerName returns the village name for the user, or fallback if they aren't in the village.
