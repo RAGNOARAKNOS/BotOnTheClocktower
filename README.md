@@ -43,7 +43,7 @@ In the developer portal, open **OAuth2 → URL Generator**, tick the `bot` and `
 | --- | --- |
 | View Channels | See the game's text and voice channels |
 | Send Messages | Reply to commands, and post game announcements in Town Square's text chat |
-| Send TTS Messages | Announce "Town Locations Mapped" in the admin channel after `!botc map`, and the `!botc gather` announcements in the village voice channels' text chat |
+| Send TTS Messages | Post the `!botc gather` announcements in the village voice channels' text chat |
 | Read Message History | Reply directly to the command message |
 | Connect | Needed alongside Move Members: Discord only lets the bot move someone into a voice channel it could connect to itself. The bot never joins voice |
 | Manage Roles | Give the `BoTC-StoryTeller` role on `!botc register`, give and take `BoTC-Player` with the `!botc village` commands, and remove the game roles on `!botc unregister` |
@@ -205,10 +205,9 @@ Commands only work from the admin channel, and only for the Storyteller:
 | Command | What it does |
 | --- | --- |
 | `!botc ping` | Replies `pong`. Use it to check the bot is online. Works for anyone before a game is registered, and for the Storyteller from any channel once one is. |
-| `!botc register` or `!botc start` | Starts a game. Makes the current channel the admin channel and the Town Square voice channel the game channel, and posts a "new game" announcement in Town Square's text chat. Makes the sender the Storyteller and gives them the `BoTC-StoryTeller` role. Apart from `ping`, the only command that works before a game is registered. Refused if a game is already registered, or if there's no voice channel named `Town Square`. Warns if the bot is missing permissions in the admin channel or the village voice channels (see [Server Setup](#4-give-the-bot-access-to-the-game-channels)). |
+| `!botc register` or `!botc start` | Starts a game. Makes the current channel the admin channel and the Town Square voice channel the game channel, records the other village voice channels (see [Game channels](#game-channels)), and posts a "new game" announcement in Town Square's text chat. Makes the sender the Storyteller and gives them the `BoTC-StoryTeller` role. Apart from `ping`, the only command that works before a game is registered. Refused if a game is already registered, or if any of the village voice channels is missing; the reply names the missing ones. Warns if the bot is missing permissions in the admin channel or the village voice channels (see [Server Setup](#4-give-the-bot-access-to-the-game-channels)). |
 | `!botc unregister` or `!botc end` | Ends the game. Removes `BoTC-StoryTeller` and `BoTC-Player` from every member who has them, posts a "game ended" announcement in Town Square, and clears the game state so a new game can be registered. |
 | `!botc sitrep` | Reports the game's server, the admin and game channels, and the Storyteller. |
-| `!botc map` | Finds the village's voice channels by name and posts "Town Locations Mapped" in the admin channel. |
 | `!botc village create` | Makes everyone in Town Square voice (except the Storyteller and bots) the village's players, replacing any existing list. Gives them `BoTC-Player` and takes it from anyone dropped. |
 | `!botc village add @player...` | Adds the mentioned users to the village and gives them `BoTC-Player`. |
 | `!botc village remove @player...` | Removes the mentioned users from the village and takes `BoTC-Player` away. |
@@ -222,7 +221,7 @@ Commands only work from the admin channel, and only for the Storyteller:
 | `!botc character list` or `!botc grimoire` | Shows the grimoire: each village player's character, team, Alive/Dead, ghost vote, whether it has been sent and any unannounced change, with totals. |
 | `!botc character send [@player...]` | DMs every unsent character to its player, or resends to the mentioned players. Reports failures and players with no character. |
 | `!botc whisper @player <text>` | DMs a village player a secret message straight away. The text can span several lines. |
-| `!botc gather [minutes]` | Starts a countdown to bring the players back to Town Square: 60 seconds, or 1 to 10 minutes. Announces it with TTS in the text chat of Town Square and the mapped rooms, and by DM to every village player, then warns again 30 seconds before the end. When time's up, moves every village player in voice (not the Storyteller) into Town Square and reports in the admin channel, naming anyone not in voice. Refused while a countdown is running. |
+| `!botc gather [minutes]` | Starts a countdown to bring the players back to Town Square: 60 seconds, or 1 to 10 minutes. Announces it with TTS in the text chat of every village voice channel, and by DM to every village player, then warns again 30 seconds before the end. When time's up, moves every village player in voice (not the Storyteller) into Town Square and reports in the admin channel, naming anyone not in voice. Refused while a countdown is running. |
 | `!botc gather cancel` | Stops the countdown and tells the same channels and players the gathering is off. |
 
 Replies to a command always go to the channel the command was sent in, which is the admin channel except for `register`, `ping` and refusals.
@@ -233,10 +232,10 @@ Any other `!botc` command from the Storyteller in the admin channel gets a "Huh?
 
 A game uses two channels:
 
-- **Admin channel:** the channel the Storyteller sends `!botc register` from. All later commands must be sent here, and admin output, such as the `!botc map` announcement, goes here. A private text channel only the Storyteller and moderators can see works well.
-- **Game channel:** the `Town Square` voice channel. The bot posts game announcements (game started, game ended) in its text chat. It doesn't join the voice channel. It must exist before `!botc register`.
+- **Admin channel:** the channel the Storyteller sends `!botc register` from. All later commands must be sent here, and admin output, such as `!botc gather`'s report, goes here. A private text channel only the Storyteller and moderators can see works well.
+- **Game channel:** the `Town Square` voice channel. The bot posts game announcements (game started, game ended) in its text chat. It doesn't join the voice channel.
 
-For `!botc register` and `!botc map`, the voice channels must use these exact names:
+The server must have all of these voice channels, with exactly these names, before `!botc register` will start a game. The bot records them when the game is registered; `!botc gather` announces in each one. Only voice channels count, and if two share a name the first is used.
 
 | Code | Channel name |
 | --- | --- |
@@ -248,7 +247,7 @@ For `!botc register` and `!botc map`, the voice channels must use these exact na
 | `RS` | Riverside |
 | `SC` | Storyteller's Corner |
 
-Game state, including the village's player list and characters, is kept in memory only. If the bot restarts, run `!botc register`, `!botc map` and `!botc village create` again, and reassign the characters. A restart doesn't remove anyone's game roles; run `!botc unregister` first if you can.
+Game state, including the village's player list and characters, is kept in memory only. If the bot restarts, run `!botc register` and `!botc village create` again, and reassign the characters. A restart doesn't remove anyone's game roles; run `!botc unregister` first if you can.
 
 ## Features
 
@@ -366,7 +365,7 @@ The detailed plan for OBS integration lives in [docs/roadmap.md](docs/roadmap.md
 | --- | --- |
 | [startup.md](docs/uml/startup.md) | Loading the configuration, connecting to Discord, shutting down |
 | [command-dispatch.md](docs/uml/command-dispatch.md) | How a message becomes a command, locking, panic recovery, the Storyteller check |
-| [game-lifecycle.md](docs/uml/game-lifecycle.md) | `register`, `unregister`, `map`, `sitrep` |
+| [game-lifecycle.md](docs/uml/game-lifecycle.md) | `register`, `unregister`, `sitrep` |
 | [village.md](docs/uml/village.md) | `village create`, `add`, `remove` |
 | [characters.md](docs/uml/characters.md) | `character` subcommands, `grimoire`, `whisper` |
 

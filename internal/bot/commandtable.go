@@ -30,11 +30,6 @@ var commands = []command{
 		run:   (*Bot).sitrep,
 	},
 	{
-		name: "map", description: "Find the village's voice channels",
-		usage: "`!botc map`",
-		run:   (*Bot).mapCommand,
-	},
-	{
 		name: "grimoire", description: "Show every player's character",
 		usage: "`!botc grimoire`",
 		run:   (*Bot).characterList,

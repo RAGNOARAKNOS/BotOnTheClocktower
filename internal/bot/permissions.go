@@ -25,11 +25,10 @@ var (
 
 // What the bot needs in each kind of game channel.
 var (
-	// The admin channel: commands, replies (threaded, so history) and map's TTS announcement.
-	adminChannelNeeds = []permission{viewChannel, sendMessages, readMessageHistory, sendTTSMessages}
-	// Town Square: announcements (gather's with TTS) in its text chat, and moving players in and out.
-	gameChannelNeeds = []permission{viewChannel, sendMessages, sendTTSMessages, connect, moveMembers}
-	// The other village rooms: gather's TTS announcements in their text chat, and moving players in and out.
+	// The admin channel: commands and replies (threaded, so history).
+	adminChannelNeeds = []permission{viewChannel, sendMessages, readMessageHistory}
+	// Town Square and the other village rooms: announcements in their text chat
+	// (gather's with TTS), and moving players in and out.
 	roomNeeds = []permission{viewChannel, sendMessages, sendTTSMessages, connect, moveMembers}
 )
 
@@ -48,10 +47,10 @@ func missingPermissions(have int64, needs []permission) []string {
 	return missing
 }
 
-// channelAccessWarning checks the bot's permissions in the admin channel, Town Square
-// and the other village voice channels that exist. It returns an empty string if
-// nothing is missing, otherwise a warning listing each channel's missing permissions.
-func (b *Bot) channelAccessWarning(guildID, adminChannelID, gameChannelID string) string {
+// channelAccessWarning checks the bot's permissions in the admin channel and the
+// village rooms (Game.villageChannels). It returns an empty string if nothing is
+// missing, otherwise a warning listing each channel's missing permissions.
+func (b *Bot) channelAccessWarning(adminChannelID string, roomChannelIDs []string) string {
 	botID, err := b.botUserID()
 	if err != nil {
 		return fmt.Sprintf("\nWarning: could not check the bot's channel permissions (%v).", err)
@@ -61,13 +60,9 @@ func (b *Bot) channelAccessWarning(guildID, adminChannelID, gameChannelID string
 		channelID string
 		needs     []permission
 	}
-	checks := []check{{adminChannelID, adminChannelNeeds}, {gameChannelID, gameChannelNeeds}}
-	if channels, err := b.discord.GuildChannels(guildID); err == nil {
-		for _, ch := range channels {
-			if ch.Type == discordgo.ChannelTypeGuildVoice && ch.ID != gameChannelID && isVillageRoom(ch.Name) {
-				checks = append(checks, check{ch.ID, roomNeeds})
-			}
-		}
+	checks := []check{{adminChannelID, adminChannelNeeds}}
+	for _, id := range roomChannelIDs {
+		checks = append(checks, check{id, roomNeeds})
 	}
 
 	var problems []string
@@ -104,14 +99,4 @@ func (b *Bot) botUserID() (string, error) {
 		return "", err
 	}
 	return me.ID, nil
-}
-
-// isVillageRoom reports whether a channel name is one of the village locations.
-func isVillageRoom(name string) bool {
-	for _, room := range villageCodeLookup {
-		if room == name {
-			return true
-		}
-	}
-	return false
 }

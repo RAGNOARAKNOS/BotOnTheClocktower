@@ -205,3 +205,23 @@ func TestVillageRooms(t *testing.T) {
 		t.Errorf("villageRooms() = %v, want %v", got, want)
 	}
 }
+
+func TestMissingRooms(t *testing.T) {
+	rooms := make(map[string]string)
+	for code := range villageCodeLookup {
+		rooms[code] = "id-" + code
+	}
+	if got := missingRooms(rooms); len(got) != 0 {
+		t.Errorf("every room found: missingRooms() = %q, want none", got)
+	}
+
+	delete(rooms, "TW")
+	delete(rooms, "CF")
+	if got, want := missingRooms(rooms), []string{"Campfire", "Tower"}; !slices.Equal(got, want) {
+		t.Errorf("missingRooms() = %q, want %q", got, want)
+	}
+
+	if got := missingRooms(nil); len(got) != len(villageCodeLookup) || !slices.IsSorted(got) {
+		t.Errorf("no rooms: missingRooms() = %q, want every room, sorted", got)
+	}
+}

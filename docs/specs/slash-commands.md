@@ -12,7 +12,7 @@ Let the Storyteller run every command through Discord's `/botc` slash-command UI
 - **Where from:** the same as `!botc`.
 - **Needs a registered game:** the same as `!botc`.
 - One command, `/botc`, whose subcommands mirror the `!botc` commands:
-  - `/botc ping`, `register`, `unregister`, `sitrep`, `map`, `grimoire`
+  - `/botc ping`, `register`, `unregister`, `sitrep`, `grimoire`
   - `/botc gather [minutes:1–10] [cancel:True]`
   - `/botc village create|add|remove|list`. `add` and `remove` take a `players` text option holding @mentions, e.g. `@Alice @Bob`.
   - `/botc character assign|team|kill|revive|ghostvote|announce|clear|list|send`. `team`, `kill`, `revive`, `ghostvote`, `clear` and `send` take `players`, and `team` also takes `team:good|evil`.
@@ -20,7 +20,7 @@ Let the Storyteller run every command through Discord's `/botc` slash-command UI
   - `/botc character assign player:@x [team:good|evil] [character:Name]` opens a form with the character's name (filled in from `character`) and a multi-line box for the guidance.
 - Every slash reply, including refusals, is **ephemeral**: only the person who ran it sees it. Everything else a command posts is unchanged: Town Square announcements, DMs, `gather`'s TTS messages and its admin-channel report.
 - With no game registered, a slash command other than `register` or `ping` gets an ephemeral "No game registered" reply. Discord needs every slash command answered, so it can't be silently ignored as `!botc` is.
-- A slash command that finishes without replying (such as `map`) gets an ephemeral "Done."
+- A slash command that finishes without replying gets an ephemeral "Done." (Every command replies today; this is a safety net.)
 
 ```text
 /botc gather minutes:2

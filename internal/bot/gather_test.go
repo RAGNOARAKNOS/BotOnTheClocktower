@@ -63,7 +63,7 @@ func TestGatherCountdown(t *testing.T) {
 	wantReply(t, h.runOne("!botc gather cancel"), "No gathering is counting down.")
 	wantReply(t, h.runOne("!botc gather 11"), "isn't a whole number of minutes from 1 to 10", "Usage: ")
 
-	wantReply(t, h.runOne("!botc gather 2"), "Gathering the players in Town Square in 2 minutes.", "Only Town Square was told")
+	wantReply(t, h.runOne("!botc gather 2"), "Gathering the players in Town Square in 2 minutes.")
 	if !h.fake.sent("POST /api/v9/channels/town/messages", "in 2 minutes", `"tts":true`) {
 		t.Error("Town Square wasn't told by TTS")
 	}

@@ -89,11 +89,7 @@ func (b *Bot) gather(req *request) {
 	c.warn = time.AfterFunc(d-gatherWarning, func() { b.gatherFire(game, c, "warning", b.gatherWarn) })
 	c.move = time.AfterFunc(d, func() { b.gatherFire(game, c, "move", b.gatherMove) })
 
-	reply := fmt.Sprintf("Gathering the players in Town Square in %s.", formatCountdown(d))
-	if len(game.Rooms) == 0 {
-		reply += " Only Town Square was told: run `!botc map` so the other rooms hear it too."
-	}
-	req.reply(reply + failureList(failures))
+	req.reply(fmt.Sprintf("Gathering the players in Town Square in %s.", formatCountdown(d)) + failureList(failures))
 }
 
 // gatherCancel stops the running countdown and tells everyone it's off.

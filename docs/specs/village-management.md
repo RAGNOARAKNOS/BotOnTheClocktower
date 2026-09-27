@@ -35,7 +35,7 @@ Subcommands:
 
 ## Rules & edge cases
 
-- `create` reads Town Square's voice state (the game channel found by `register`), so `map` doesn't need to run first.
+- `create` reads Town Square's voice state (the game channel found by `register`).
 - If Town Square is empty, `create` still succeeds and says the village is empty.
 - Players are named by @mention only. `add`/`remove` without any mentions replies with usage help.
 - `add` skips (and reports) bots, the Storyteller, and anyone already in the village. `remove` skips (and reports) anyone not in the village.

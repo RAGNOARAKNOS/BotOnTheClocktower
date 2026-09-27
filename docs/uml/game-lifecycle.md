@@ -1,34 +1,38 @@
-# Game lifecycle: register, map, sitrep, unregister
+# Game lifecycle: register, sitrep, unregister
 
 [← UML index](README.md)
 
-Starting and ending a game, and the commands that report on it or prepare it. Covers `register`, `unregister`, `mapRooms`, `sitrep` and their helpers in [internal/bot/lifecycle.go](../../internal/bot/lifecycle.go), `newGame` and `villageRooms` in [internal/bot/game.go](../../internal/bot/game.go), and `removeGameRoles` in [internal/bot/roles.go](../../internal/bot/roles.go). The bot runs one game at a time.
+Starting and ending a game, and reporting on it. Covers `register`, `unregister`, `sitrep` and their helpers in [internal/bot/lifecycle.go](../../internal/bot/lifecycle.go), `newGame`, `villageRooms` and `missingRooms` in [internal/bot/game.go](../../internal/bot/game.go), and `removeGameRoles` in [internal/bot/roles.go](../../internal/bot/roles.go). The bot runs one game at a time.
 
 Every command here has already passed [`allowed`](command-dispatch.md#activity-allowed): `register` runs from anywhere when no game is registered, and everything else, including `register` once a game exists, only runs for the Storyteller in the admin channel.
 
 ## Activity: `register`
 
-Whoever sends `!botc register` (or `start`) becomes the Storyteller, and the channel they send it from becomes the admin channel. If the Storyteller role can't be given, or the bot is missing channel permissions, registration still succeeds and the reply includes a warning. The "already registered" refusal is only reached by the Storyteller in the admin channel; `allowed` refuses anyone else.
+Whoever sends `!botc register` (or `start`) becomes the Storyteller, and the channel they send it from becomes the admin channel. Every village voice channel in `villageCodeLookup` must exist, or nothing is registered. If the Storyteller role can't be given, or the bot is missing channel permissions, registration still succeeds and the reply includes a warning. The "already registered" refusal is only reached by the Storyteller in the admin channel; `allowed` refuses anyone else.
 
 ```mermaid
 flowchart TD
     start((" ")):::initial --> d1{" "}
     d1 -->|"[a game is already registered]"| refused1("Reply: A game is already registered")
-    d1 -->|"[no game]"| find("findVoiceChannelID:<br/>look for a voice channel named Town Square")
+    d1 -->|"[no game]"| list("GuildChannels: the server's channels")
+    list --> d0{" "}
+    d0 -->|"[request failed]"| refused0("Reply: Could not read the server's channels")
+    d0 -->|"[channels returned]"| find("villageRooms: code → the first voice channel<br/>with each name in villageCodeLookup")
     find --> d2{" "}
-    d2 -->|"[no such channel, or GuildChannels failed]"| refused2("Reply: Could not find the game channel")
-    d2 -->|"[found]"| save("Save the guild, admin channel = this channel,<br/>game channel = Town Square, Storyteller = sender<br/>(newGame, with empty player, character and room lists)")
+    d2 -->|"[missingRooms: any room not found]"| refused2("Reply: Could not find these village<br/>voice channels, naming them")
+    d2 -->|"[every room found]"| save("newGame: the guild, admin channel = this channel,<br/>game channel = Town Square, Storyteller = sender,<br/>Rooms = every room; no players yet")
     save --> announce("Post in Town Square: A new game has begun")
     announce --> role("assignStorytellerRole:<br/>findRoleID(BoTC-StoryTeller), then give it to the sender")
     role --> d3{" "}
     d3 -->|"[role missing, above the bot, or the request failed]"| warn("Add a role warning to the reply")
-    d3 -->|"[role given]"| perms("channelAccessWarning: the bot's permissions in the<br/>admin channel, Town Square and the other village rooms")
+    d3 -->|"[role given]"| perms("channelAccessWarning: the bot's permissions in the<br/>admin channel and every village room (villageChannels)")
     warn --> perms
     perms --> d4{" "}
     d4 -->|"[a permission missing, or a channel it can't see]"| pwarn("Add a warning listing each channel's<br/>missing permissions")
     d4 -->|"[all present]"| reply("Reply: Game registered")
     pwarn --> reply
     refused1 --> refused(((" "))):::final
+    refused0 --> refused
     refused2 --> refused
     reply --> registered(((" "))):::final
 
@@ -50,12 +54,13 @@ sequenceDiagram
     alt a game is already registered
         Bot->>REST: Reply "A game is already registered..."
     else no game
-        Bot->>REST: GuildChannels(guild), in findVoiceChannelID
-        REST-->>Bot: Channels
-        alt no voice channel named "Town Square"
-            Bot->>REST: Reply "Could not find the game channel..."
-        else found
-            Note over Bot: b.game = newGame(guild, admin channel = this channel,<br/>game channel = Town Square, Storyteller = sender)
+        Bot->>REST: GuildChannels(guild)
+        REST-->>Bot: Channels (or an error: "Could not read the server's channels...")
+        Note over Bot: villageRooms: each room's first voice channel,<br/>then missingRooms
+        alt a village voice channel is missing
+            Bot->>REST: Reply "Could not find these village voice channels: ..."
+        else every room found
+            Note over Bot: b.game = newGame(guild, admin channel = this channel,<br/>game channel = Town Square, Storyteller = sender),<br/>Rooms = every room
             Bot->>REST: ChannelMessageSend(Town Square, "A new game has begun...")
             REST-->>Town: Start announcement
             Bot->>REST: GuildRoles(guild), in findRoleID
@@ -63,7 +68,6 @@ sequenceDiagram
             opt BoTC-StoryTeller exists
                 Bot->>REST: GuildMemberRoleAdd(guild, Storyteller, role)
             end
-            Bot->>REST: GuildChannels(guild), to find the other village rooms
             loop admin channel, Town Square, each other village room
                 Note over Bot: UserChannelPermissions(bot, channel):<br/>from the state cache, else REST (403 = can't see it)
             end
@@ -128,29 +132,6 @@ sequenceDiagram
     REST-->>ST: Reply in the admin channel
 ```
 
-## Sequence: `map`
-
-`map` finds the village's voice channels by name (see `villageCodeLookup`) and stores their IDs in `Game.Rooms`. Only voice channels count, and if several share a name the first wins, as in `register`, so Town Square's ID is always the game channel. It doesn't move anyone.
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor ST as Storyteller
-    participant Bot as Bot (runCommand, mapRooms)
-    participant REST as Discord REST API
-
-    ST->>Bot: !botc map (from the admin channel)
-    Bot->>REST: GuildChannels(guild)
-    alt request failed
-        REST-->>Bot: Error
-        Bot->>REST: Reply "Could not map the town's channels..."
-    else channels returned
-        REST-->>Bot: Channels
-        Note over Bot: villageRooms: Game.Rooms = code → the first voice channel<br/>with each name in villageCodeLookup (TS, CA, CF, PS, TW, RS, SC)
-        Bot->>REST: ChannelMessageSendTTS(admin channel, "Town Locations Mapped")
-    end
-```
-
 ## Sequence: `sitrep`
 
 `sitrep` only runs while a game is registered: `allowed` ignores it otherwise.
@@ -169,4 +150,4 @@ sequenceDiagram
 
 ---
 
-Last checked against code: 2026-09-27 (f7831d7)
+Last checked against code: 2026-09-27 (10f6993)

@@ -12,7 +12,7 @@ All diagrams are written in [Mermaid](https://mermaid.js.org/), which GitHub ren
 | --- | --- | --- |
 | [startup.md](startup.md) | Startup and shutdown | Startup and shutdown |
 | [command-dispatch.md](command-dispatch.md) | Handling a message, handling a slash command, `allowed` | Handling a message, handling a slash command, a command with a form |
-| [game-lifecycle.md](game-lifecycle.md) | `register`, `unregister` | `register`, `unregister`, `map`, `sitrep` |
+| [game-lifecycle.md](game-lifecycle.md) | `register`, `unregister` | `register`, `unregister`, `sitrep` |
 | [village.md](village.md) | Choosing a `village` subcommand, `create`, `add`, `remove` | `village create` |
 | [characters.md](characters.md) | `character assign`, `kill`/`revive`, `ghostvote`, `team`, `announce` | `announce`, `send`, `grimoire`, `whisper` |
 | [gather.md](gather.md) | `gather` | `gather` countdown, `gather cancel` |
@@ -64,10 +64,8 @@ Which diagram covers which code. When you change one of these functions, update 
 | `interaction`, `opensForm`, `slashCommand`, `modalSubmit`, `runSlash`, `slashRequest`, `slashResponder`, `resolveUsers`, `slashWords`, `slashOptions`, `modalCommand`, `modalFields`, `whisperModal`, `assignModal` | [command-dispatch.md](command-dispatch.md) |
 | `registerSlashCommands`, `slashCommands`, `slashSubcommands` | [startup.md](startup.md) |
 | `allowed` | [command-dispatch.md](command-dispatch.md) |
-| `mapCommand` | [game-lifecycle.md](game-lifecycle.md) |
-| `register`, `newGame`, `findVoiceChannelID`, `assignStorytellerRole`, `findRoleID`, `channelAccessWarning` | [game-lifecycle.md](game-lifecycle.md) |
+| `register`, `newGame`, `villageRooms`, `missingRooms`, `villageCodeLookup`, `assignStorytellerRole`, `findRoleID`, `channelAccessWarning` | [game-lifecycle.md](game-lifecycle.md) |
 | `unregister`, `removeGameRoles` | [game-lifecycle.md](game-lifecycle.md) |
-| `mapRooms`, `villageRooms`, `villageCodeLookup` | [game-lifecycle.md](game-lifecycle.md) |
 | `sitrep` | [game-lifecycle.md](game-lifecycle.md) |
 | `villageCreate`, `villageAdd`, `villageRemove`, `Game.ReplacePlayers`, `Game.AddPlayer`, `Game.RemovePlayer` | [village.md](village.md) |
 | `setPlayerRole`, `replyWithRoleWarning`, `lookupMember`, `memberDisplayName` | [village.md](village.md) |
@@ -83,7 +81,7 @@ Which diagram covers which code. When you change one of these functions, update 
 
 - `villageList`, `characterClear` (with `Game.ClearCharacter`): a single loop and a reply.
 - `sortedNames`, `Game.sortedPlayerIDs`, `Game.playerName`, `ghostVoteState`, `formatCountdown`, and the reply helpers in `format.go` (`countLine`, `listLine`, `failureList`, `plural`): formatting helpers.
-- `reply`, `send`: send a message and log any failure. `orNoGame`, `stringOption`, `mentionIDsIn`, `truncate`, the slash option builders (`slashOption`, `subcommand`, `playersOption`, `minutesOption` and the like) and `opts`: small helpers. `missingPermissions`, `isVillageRoom`, `botUserID`: small helpers for `channelAccessWarning`. `ping`: sends `pong`.
+- `reply`, `send`: send a message and log any failure. `orNoGame`, `stringOption`, `mentionIDsIn`, `truncate`, the slash option builders (`slashOption`, `subcommand`, `playersOption`, `minutesOption` and the like) and `opts`: small helpers. `missingPermissions`, `botUserID`: small helpers for `channelAccessWarning`. `ping`: sends `pong`.
 
 ## Keeping the diagrams up to date
 

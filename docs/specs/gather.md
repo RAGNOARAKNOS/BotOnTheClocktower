@@ -13,7 +13,7 @@ Bring every player back to Town Square with a countdown: warn them in text and T
 - **Needs a registered game:** yes
 - `!botc gather` starts a 60-second countdown. `!botc gather <minutes>` starts a countdown of that many minutes, from 1 to 10.
 - When the command is entered, the bot announces that the Storyteller will be bringing the players back to Town Square, and when:
-  - a TTS message in the text chat of each village voice channel: Town Square and the rooms `map` recorded, and
+  - a TTS message in the text chat of each village voice channel: Town Square and the other rooms `register` found, and
   - a DM to every player in the village.
 - 30 seconds before the countdown ends, it sends a second warning to the same channels and players, again with TTS in the channels.
 - When the countdown ends, it moves every village player who is in a voice channel other than Town Square into Town Square. The Storyteller isn't moved.
@@ -44,7 +44,6 @@ Bring every player back to Town Square with a countdown: warn them in text and T
 - The time is a whole number of minutes, from 1 to 10. Anything else gets a usage reply and starts nothing.
 - Only one countdown runs at a time. `gather` while one is running is refused, with the time left.
 - `gather cancel` with no countdown running just says so.
-- If `map` hasn't been run, only Town Square gets the announcement; the reply suggests running `!botc map`.
 - A player who isn't in voice can't be moved, and is named in the report.
 - Players already in Town Square aren't moved.
 - The countdown runs after the command has finished, so it mustn't hold `Bot.mu` while waiting. When it fires (warning or move), it takes `Bot.mu` and checks that the game it was started for is still the registered one; if the game was unregistered or replaced, it does nothing.
@@ -79,6 +78,7 @@ Bring every player back to Town Square with a countdown: warn them in text and T
 - 2026-09-26: The players are the village list from `!botc village` ([village-management.md](village-management.md)).
 - 2026-09-27: The earlier plan is scrapped. `gather` is now a countdown: announce in text and TTS in the voice channels and by DM, warn again 30 seconds before the end, then force-move the players to Town Square. The default is 60 seconds; the Storyteller can give a time in minutes.
 - 2026-09-27: Players are moved from whichever voice channel they're in, not only the village rooms.
+- 2026-09-27: `!botc map` is removed; `register` requires and records every village room, so every gathering is announced in all of them (it used to reach only Town Square until `map` had been run).
 - 2026-09-27: Announcements go to the village voice channels only, not every voice channel on the server. One countdown at a time: a second `gather` is refused. `gather cancel` stops it and tells everyone. The maximum is 10 minutes. The Storyteller isn't moved. The report lists players who aren't in voice.
 
 ## Implementation
@@ -89,6 +89,6 @@ Bring every player back to Town Square with a countdown: warn them in text and T
   - `gatherAnnounce` sends the TTS messages and DMs.
   - `gatherWarn` and `gatherMove` are the timed steps, run through `gatherFire`, which takes `Bot.mu` and checks the game and countdown are unchanged.
 - The running countdown is `Game.gather` (a `gatherCountdown` holding both timers). `unregister` stops it.
-- `Game.villageChannels` lists Town Square and the mapped rooms, each once.
+- `Game.villageChannels` lists Town Square and the other village rooms, each once.
 - `permissions.go` checks Send Messages and Send TTS Messages in Town Square and the village rooms.
 - Where players are comes from discordgo's voice-state cache, so a player who joined voice while the bot was offline is still found once the gateway has sent the guild's voice states.

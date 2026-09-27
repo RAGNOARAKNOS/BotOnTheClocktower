@@ -3,8 +3,12 @@ package bot
 import (
 	"fmt"
 	"log"
+	"strings"
 )
 
+// register starts a game: the sender becomes the Storyteller, this channel the admin
+// channel, and the village's voice channels (villageCodeLookup) are recorded. It's
+// refused if any of those channels is missing.
 func (b *Bot) register(req *request) {
 	if b.game != nil {
 		reply := fmt.Sprintf("A game is already registered, with <@%s> as the Storyteller. This command will not execute", b.game.StorytellerID)
@@ -12,15 +16,20 @@ func (b *Bot) register(req *request) {
 		return
 	}
 
-	townSquareName := villageCodeLookup["TS"]
-	gameChannelID, err := b.findVoiceChannelID(req.guildID, townSquareName)
+	channels, err := b.discord.GuildChannels(req.guildID)
 	if err != nil {
-		reply := fmt.Sprintf("Could not find the game channel (%v). Create a voice channel named %q, then try again. This command will not execute", err, townSquareName)
-		req.reply(reply)
+		req.reply(fmt.Sprintf("Could not read the server's channels (%v). This command will not execute", err))
+		return
+	}
+	rooms := villageRooms(channels)
+	if missing := missingRooms(rooms); len(missing) > 0 {
+		req.reply(fmt.Sprintf("Could not find these village voice channels: %s. Create voice channels with exactly these names, then try again. This command will not execute",
+			strings.Join(missing, ", ")))
 		return
 	}
 
-	b.game = newGame(req.guildID, req.channelID, gameChannelID, req.authorID)
+	b.game = newGame(req.guildID, req.channelID, rooms["TS"], req.authorID)
+	b.game.Rooms = rooms
 
 	log.Printf("The game has been registered at %s admin channel %s game channel %s storyteller %s", b.game.GuildID, b.game.AdminChannelID, b.game.GameChannelID, b.game.StorytellerID)
 
@@ -32,7 +41,7 @@ func (b *Bot) register(req *request) {
 		reply += fmt.Sprintf(" Warning: could not assign the %q role (%v). Check the role exists and sits below the bot's role.", storytellerRoleName, err)
 	}
 	// Missing channel permissions make the bot silently ignore commands, so warn now.
-	if warning := b.channelAccessWarning(b.game.GuildID, b.game.AdminChannelID, b.game.GameChannelID); warning != "" {
+	if warning := b.channelAccessWarning(b.game.AdminChannelID, b.game.villageChannels()); warning != "" {
 		log.Printf("The bot is missing channel permissions: %s", warning)
 		reply += warning
 	}
@@ -66,26 +75,4 @@ func (b *Bot) unregister(req *request) {
 // sitrep reports where the game is running. It only runs while a game is registered.
 func (b *Bot) sitrep(req *request) {
 	req.say(fmt.Sprintf("SITREP-Game is initialised at guildid# %s admin channel <#%s> game channel <#%s> storyteller <@%s>", b.game.GuildID, b.game.AdminChannelID, b.game.GameChannelID, b.game.StorytellerID))
-}
-
-// mapCommand runs `!botc map`, replying if the channels couldn't be read.
-func (b *Bot) mapCommand(req *request) {
-	if err := b.mapRooms(); err != nil {
-		log.Printf("Could not map rooms: %v", err)
-		req.reply(fmt.Sprintf("Could not map the town's channels (%v)", err))
-	}
-}
-
-// mapRooms records the IDs of the village's voice channels in Game.Rooms.
-func (b *Bot) mapRooms() error {
-	channels, err := b.discord.GuildChannels(b.game.GuildID)
-	if err != nil {
-		return err
-	}
-	b.game.Rooms = villageRooms(channels)
-
-	if _, err := b.discord.ChannelMessageSendTTS(b.game.AdminChannelID, "Town Locations Mapped"); err != nil {
-		log.Printf("Could not post in channel %s: %v", b.game.AdminChannelID, err)
-	}
-	return nil
 }

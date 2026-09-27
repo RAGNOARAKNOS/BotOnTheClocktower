@@ -71,7 +71,7 @@ sequenceDiagram
 
     ST->>Bot: !botc gather [minutes] (from the admin channel)
     Note over Bot: parseGather, then game.gather = new countdown
-    loop Town Square, then each mapped room (Game.villageChannels)
+    loop Town Square, then each other village room (Game.villageChannels)
         Bot->>REST: ChannelMessageSendTTS(channel, "The Storyteller will be bringing everyone back...")
     end
     loop each village player (gatherAnnounce)
@@ -139,4 +139,4 @@ sequenceDiagram
 
 ---
 
-Last checked against code: 2026-09-27 (85bccfb)
+Last checked against code: 2026-09-27 (10f6993)

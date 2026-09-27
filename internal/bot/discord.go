@@ -1,10 +1,6 @@
 package bot
 
-import (
-	"fmt"
-
-	"github.com/bwmarrin/discordgo"
-)
+import "github.com/bwmarrin/discordgo"
 
 // Discord's limits.
 const (
@@ -46,20 +42,4 @@ func memberDisplayName(member *discordgo.Member, userID string) string {
 		return userID
 	}
 	return member.DisplayName()
-}
-
-// findVoiceChannelID returns the ID of the server's first voice channel with exactly this name.
-func (b *Bot) findVoiceChannelID(guildID, channelName string) (string, error) {
-	channels, err := b.discord.GuildChannels(guildID)
-	if err != nil {
-		return "", err
-	}
-
-	for _, ch := range channels {
-		if ch.Type == discordgo.ChannelTypeGuildVoice && ch.Name == channelName {
-			return ch.ID, nil
-		}
-	}
-
-	return "", fmt.Errorf("no voice channel named %q in this server", channelName)
 }

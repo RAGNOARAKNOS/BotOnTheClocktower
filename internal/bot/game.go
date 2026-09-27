@@ -15,7 +15,7 @@ type Game struct {
 	GameChannelID  string // Town Square voice channel; game announcements go to its text chat
 	StorytellerID  string
 	Players        map[string]*Player // the village: user ID → player
-	Rooms          map[string]string  // room code (see villageCodeLookup) → channel ID; filled by map
+	Rooms          map[string]string  // room code (see villageCodeLookup) → channel ID; found by register, every room
 
 	gather *gatherCountdown // the running `gather` countdown, or nil
 }
@@ -169,7 +169,7 @@ func (g *Game) MarkAnnounced() {
 }
 
 // villageChannels returns the village's voice channel IDs: Town Square first, then
-// the mapped rooms in room-code order, each once.
+// the other rooms in room-code order, each once.
 func (g *Game) villageChannels() []string {
 	channels := []string{g.GameChannelID}
 	for _, code := range slices.Sorted(maps.Keys(g.Rooms)) {
@@ -195,6 +195,8 @@ func (g *Game) sortedPlayerIDs() []string {
 	})
 }
 
+// villageCodeLookup is every room in the village, by code: the voice channels the
+// server must have, with exactly these names, before a game can be registered.
 var villageCodeLookup = map[string]string{
 	"TS": "Town Square",
 	"CA": "Cathedral",
@@ -205,8 +207,8 @@ var villageCodeLookup = map[string]string{
 	"SC": "Storyteller's Corner",
 }
 
-// villageRooms maps each room code to the first voice channel with the room's name,
-// the same rule findVoiceChannelID uses, so Town Square matches the game channel.
+// villageRooms maps each room code to the first voice channel with the room's name.
+// Text channels and categories with a room's name don't count.
 func villageRooms(channels []*discordgo.Channel) map[string]string {
 	rooms := make(map[string]string)
 	for _, ch := range channels {
@@ -220,4 +222,17 @@ func villageRooms(channels []*discordgo.Channel) map[string]string {
 		}
 	}
 	return rooms
+}
+
+// missingRooms returns the names of the village rooms that rooms (from villageRooms)
+// has no channel for, sorted.
+func missingRooms(rooms map[string]string) []string {
+	var missing []string
+	for code, name := range villageCodeLookup {
+		if _, ok := rooms[code]; !ok {
+			missing = append(missing, name)
+		}
+	}
+	slices.Sort(missing)
+	return missing
 }

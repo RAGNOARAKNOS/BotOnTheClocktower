@@ -21,10 +21,9 @@ Status values: **IDEA** (not yet shaped) â†’ **PLANNED** (agreed, not started) â
 | --- | --- | --- |
 | [command-handling.md](command-handling.md) | (all commands) | DONE |
 | [ping.md](ping.md) | `!botc ping` | DONE |
-| [register.md](register.md) | `!botc register` / `start` | DONE |
+| [register.md](register.md) | `!botc register` / `start` (also finds the village rooms, which `!botc map` used to do) | DONE |
 | [unregister.md](unregister.md) | `!botc unregister` / `end` | DONE |
 | [sitrep.md](sitrep.md) | `!botc sitrep` | DONE |
-| [map.md](map.md) | `!botc map` | DONE (with known gaps) |
 | [village-management.md](village-management.md) | `!botc village ...` | DONE (untested on Discord) |
 | [characters.md](characters.md) | `!botc character ...`, `!botc whisper` | DONE (untested on Discord) |
 | [gather.md](gather.md) | `!botc gather` | DONE (untested on Discord) |
