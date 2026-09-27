@@ -38,6 +38,8 @@ docker build -t botontheclocktower .               # container image (distroless
 
 Configuration: `BOTAPIKEY` (Discord bot token), read from the environment or from an optional `.env` file in the working directory. `.env` is gitignored — never commit it or print the token.
 
+**Prefer tools in Docker.** For anything beyond Go and git (for example mermaid-cli, linters or Node-based tools), run it in a container with `docker run --rm ...` rather than installing it, or running it through `npx`, on the host. This keeps extra tools off the operating system. If Docker isn't running, ask the user to start it rather than installing the tool locally. On Git Bash for Windows, put `MSYS_NO_PATHCONV=1` in front of `docker run` so volume paths aren't mangled.
+
 ## Layout
 
 - `cmd/bot/main.go` — entry point: `config.Load()` then `bot.Run(cfg.Token)`.
@@ -47,7 +49,7 @@ Configuration: `BOTAPIKEY` (Discord bot token), read from the environment or fro
   - `commands.go` — the `commands` table (name and alias → handler plus access flags), `extractCommand` (dispatch), `allowed` (access), `ping`, and the `reply`/`send` helpers.
   - `game.go` — `Game` (the registered game's state), `register`, `unregister`, `sitrep`, `map`.
   - `village.go` — the `village` commands. `roles.go` — Discord role lookups and changes. `discord.go` — member and channel lookups. `permissions.go` — what the bot needs in each game channel, checked by `register`.
-  - `characters.go` — the `character` commands and `Character`. `grimoire.go` — `character list`/`grimoire` output. `whisper.go` — `whisper` and the DM helpers.
+  - `characters.go` — the `character` commands and `Character`. `grimoire.go` — `character list`/`grimoire` output. `whisper.go` — `whisper` and the DM helpers. `gather.go` — the `gather` countdown (timers that take `Bot.mu` when they fire).
   - `parse.go` — parsing raw message content (mentions, assignments, whispers). Tests sit next to the code: `parse_test.go`, `grimoire_test.go`, `characters_test.go`.
 - `docs/uml/` — Mermaid UML activity and sequence diagrams of how the code works at runtime, with a source map from Go functions to diagrams.
 

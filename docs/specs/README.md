@@ -27,12 +27,12 @@ Status values: **IDEA** (not yet shaped) â†’ **PLANNED** (agreed, not started) â
 | [map.md](map.md) | `!botc map` | DONE (with known gaps) |
 | [village-management.md](village-management.md) | `!botc village ...` | DONE (untested on Discord) |
 | [characters.md](characters.md) | `!botc character ...`, `!botc whisper` | DONE (untested on Discord) |
+| [gather.md](gather.md) | `!botc gather` | DONE (untested on Discord) |
 
 ### Planned and ideas
 
 | Spec | Command | Status |
 | --- | --- | --- |
-| [gather.md](gather.md) | `!botc gather` | IN PROGRESS |
 | [bedtime.md](bedtime.md) | `!botc bedtime` | PLANNED |
 | [obs-integration.md](obs-integration.md) | `!botc obs ...` | PLANNED (detailed in [roadmap.md](../roadmap.md)) |
 | [vote-tracking.md](vote-tracking.md) | TBD | IDEA |

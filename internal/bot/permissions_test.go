@@ -14,9 +14,9 @@ func TestMissingPermissions(t *testing.T) {
 		needs []permission
 		want  []string
 	}{
-		{"has everything", discordgo.PermissionViewChannel | discordgo.PermissionVoiceConnect | discordgo.PermissionVoiceMoveMembers, roomNeeds, nil},
+		{"has everything", discordgo.PermissionViewChannel | discordgo.PermissionSendMessages | discordgo.PermissionSendTTSMessages | discordgo.PermissionVoiceConnect | discordgo.PermissionVoiceMoveMembers, roomNeeds, nil},
 		{"can't view", discordgo.PermissionSendMessages, []permission{viewChannel, sendMessages}, []string{"View Channels"}},
-		{"nothing", 0, roomNeeds, []string{"View Channels", "Connect", "Move Members"}},
+		{"nothing", 0, roomNeeds, []string{"View Channels", "Send Messages", "Send TTS Messages", "Connect", "Move Members"}},
 		{"administrator covers all", discordgo.PermissionAdministrator, gameChannelNeeds, nil},
 	}
 	for _, tt := range tests {

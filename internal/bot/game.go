@@ -3,6 +3,8 @@ package bot
 import (
 	"fmt"
 	"log"
+	"maps"
+	"slices"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -16,6 +18,8 @@ type Game struct {
 	Players        map[string]string     // village: user ID → display name
 	Characters     map[string]*Character // user ID → character; only for players in the village
 	Rooms          map[string]string     // room code (see villageCodeLookup) → channel ID; filled by map
+
+	gather *gatherCountdown // the running `gather` countdown, or nil
 }
 
 // newGame starts a game with empty player, character and room lists.
@@ -119,6 +123,18 @@ func (g *Game) MarkAnnounced() {
 	}
 }
 
+// villageChannels returns the village's voice channel IDs: Town Square first, then
+// the mapped rooms in room-code order, each once.
+func (g *Game) villageChannels() []string {
+	channels := []string{g.GameChannelID}
+	for _, code := range slices.Sorted(maps.Keys(g.Rooms)) {
+		if id := g.Rooms[code]; !slices.Contains(channels, id) {
+			channels = append(channels, id)
+		}
+	}
+	return channels
+}
+
 var villageCodeLookup = map[string]string{
 	"TS": "Town Square",
 	"CA": "Cathedral",
@@ -172,6 +188,9 @@ func (b *Bot) unregister(message *discordgo.MessageCreate, _ []string) {
 
 	b.send(b.game.GameChannelID, "The game has ended. Thanks for playing!")
 
+	if b.game.gather != nil {
+		b.game.gather.stop()
+	}
 	b.game = nil
 
 	log.Printf("The game at %s has been unregistered, %d game roles removed", guildID, removed)

@@ -2,6 +2,7 @@ package bot
 
 import (
 	"maps"
+	"slices"
 	"testing"
 )
 
@@ -107,5 +108,17 @@ func TestSetAliveAndGhostVote(t *testing.T) {
 	g.MarkAnnounced()
 	if died, revived := g.PendingLifeChanges(); len(died)+len(revived) != 0 {
 		t.Errorf("after MarkAnnounced: died %v, revived %v, want nothing pending", died, revived)
+	}
+}
+
+func TestVillageChannels(t *testing.T) {
+	g := testGame()
+	if got, want := g.villageChannels(), []string{"town"}; !slices.Equal(got, want) {
+		t.Errorf("unmapped: villageChannels() = %v, want %v", got, want)
+	}
+
+	g.Rooms = map[string]string{"TS": "town", "TW": "tower", "CA": "cathedral"}
+	if got, want := g.villageChannels(), []string{"town", "cathedral", "tower"}; !slices.Equal(got, want) {
+		t.Errorf("mapped: villageChannels() = %v, want %v", got, want)
 	}
 }

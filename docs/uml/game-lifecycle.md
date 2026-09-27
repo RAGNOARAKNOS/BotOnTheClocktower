@@ -90,7 +90,8 @@ flowchart TD
     d5 -->|"[full page: more members may follow]"| page
     d5 -->|"[last page]"| announce("Post in Town Square:<br/>The game has ended")
     recErr --> announce
-    announce --> reset("Forget the game: b.game = nil")
+    announce --> stopg("Stop any running gather countdown<br/>(gatherCountdown.stop)")
+    stopg --> reset("Forget the game: b.game = nil")
     reset --> reply("Reply: Game ended, N roles removed<br/>(plus a warning listing any errors)")
     reply --> ended(((" "))):::final
 
@@ -122,7 +123,7 @@ sequenceDiagram
     end
     Bot->>REST: ChannelMessageSend(Town Square, "The game has ended...")
     REST-->>Town: End announcement
-    Note over Bot: Forget the game: b.game = nil
+    Note over Bot: Stop any running gather countdown,<br/>then forget the game: b.game = nil
     Bot->>REST: Reply "Game ended. Removed N game role(s)." (plus warnings)
     REST-->>ST: Reply in the admin channel
 ```
@@ -168,4 +169,4 @@ sequenceDiagram
 
 ---
 
-Last checked against code: 2026-09-27 (6b0d196)
+Last checked against code: 2026-09-27 (b661eed)

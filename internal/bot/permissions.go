@@ -27,10 +27,10 @@ var (
 var (
 	// The admin channel: commands, replies (threaded, so history) and map's TTS announcement.
 	adminChannelNeeds = []permission{viewChannel, sendMessages, readMessageHistory, sendTTSMessages}
-	// Town Square: announcements in its text chat, and moving players in and out.
-	gameChannelNeeds = []permission{viewChannel, sendMessages, connect, moveMembers}
-	// The other village rooms: moving players in and out.
-	roomNeeds = []permission{viewChannel, connect, moveMembers}
+	// Town Square: announcements (gather's with TTS) in its text chat, and moving players in and out.
+	gameChannelNeeds = []permission{viewChannel, sendMessages, sendTTSMessages, connect, moveMembers}
+	// The other village rooms: gather's TTS announcements in their text chat, and moving players in and out.
+	roomNeeds = []permission{viewChannel, sendMessages, sendTTSMessages, connect, moveMembers}
 )
 
 // missingPermissions returns the names of the permissions in needs that have lacks.

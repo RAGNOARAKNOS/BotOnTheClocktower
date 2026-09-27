@@ -31,6 +31,7 @@ var commands = map[string]command{
 	"character":  {run: (*Bot).character},
 	"grimoire":   {run: (*Bot).characterList},
 	"whisper":    {run: (*Bot).whisper},
+	"gather":     {run: (*Bot).gather},
 }
 
 // extractCommand runs the command named by the second word, if the sender may run it.

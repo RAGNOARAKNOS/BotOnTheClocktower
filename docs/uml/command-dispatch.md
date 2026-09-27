@@ -32,8 +32,9 @@ flowchart TD
     cmd -->|"[character]"| chr("character")
     cmd -->|"[grimoire]"| gri("characterList")
     cmd -->|"[whisper]"| whi("whisper")
+    cmd -->|"[gather]"| gat("gather")
     cmd -->|"[anything else]"| wtf("Reply: Huh? WTF is that command?!")
-    ign & refuse & ping & reg & unreg & sit & maprooms & vil & chr & gri & whi & wtf --> merged{" "}
+    ign & refuse & ping & reg & unreg & sit & maprooms & vil & chr & gri & whi & gat & wtf --> merged{" "}
     merged -->|"[the command panicked]"| rec("Log the stack trace<br/>Reply: Something went wrong")
     merged -->|"[no panic]"| unlock("Unlock Bot.mu")
     rec --> unlock
@@ -43,7 +44,7 @@ flowchart TD
     classDef final fill:#000,stroke:#666
 ```
 
-Each command is detailed in [game-lifecycle.md](game-lifecycle.md), [village.md](village.md) and [characters.md](characters.md).
+Each command is detailed in [game-lifecycle.md](game-lifecycle.md), [village.md](village.md), [characters.md](characters.md) and [gather.md](gather.md).
 
 ## Sequence: handling a message
 
@@ -114,4 +115,4 @@ flowchart TD
 
 ---
 
-Last checked against code: 2026-09-27 (4bef1c8)
+Last checked against code: 2026-09-27 (b661eed)

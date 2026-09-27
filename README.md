@@ -43,11 +43,11 @@ In the developer portal, open **OAuth2 → URL Generator**, tick the `bot` scope
 | --- | --- |
 | View Channels | See the game's text and voice channels |
 | Send Messages | Reply to commands, and post game announcements in Town Square's text chat |
-| Send TTS Messages | Announce "Town Locations Mapped" in the admin channel after `!botc map` |
+| Send TTS Messages | Announce "Town Locations Mapped" in the admin channel after `!botc map`, and the `!botc gather` announcements in the village voice channels' text chat |
 | Read Message History | Reply directly to the command message |
 | Connect | Needed alongside Move Members: Discord only lets the bot move someone into a voice channel it could connect to itself. The bot never joins voice |
 | Manage Roles | Give the `BoTC-StoryTeller` role on `!botc register`, give and take `BoTC-Player` with the `!botc village` commands, and remove the game roles on `!botc unregister` |
-| Move Members | Needed for the planned commands that move players between voice channels |
+| Move Members | Move players into Town Square with `!botc gather` |
 
 When the bot joins, Discord automatically creates a role with the bot's name that holds these permissions. Don't delete it. These are server-wide permissions: if your game channels are private, the bot also needs access to them (step 4).
 
@@ -92,9 +92,10 @@ The simplest reliable setup is one category for the whole game, with a permissio
    | --- | --- |
    | View Channels | See commands and the channels it posts in |
    | Send Messages | Reply to commands and post announcements |
+   | Send TTS Messages | Post the `!botc gather` announcements in the voice channels' text chat |
    | Read Message History | Reply to a command as a threaded reply |
    | Connect | Required alongside Move Members for voice channels |
-   | Move Members | Move players between voice channels (planned commands) |
+   | Move Members | Move players into Town Square (`!botc gather`) |
 
 3. In each channel's **Permissions** tab, check it says **Synced with category**. If a channel isn't synced, click **Sync Now**, or add the same override to that channel by hand.
 
@@ -213,6 +214,8 @@ Commands only work from the admin channel, and only for the Storyteller:
 | `!botc character list` or `!botc grimoire` | Shows the grimoire: each village player's character, team, Alive/Dead, ghost vote, whether it has been sent and any unannounced change, with totals. |
 | `!botc character send [@player...]` | DMs every unsent character to its player, or resends to the mentioned players. Reports failures and players with no character. |
 | `!botc whisper @player <text>` | DMs a village player a secret message straight away. The text can span several lines. |
+| `!botc gather [minutes]` | Starts a countdown to bring the players back to Town Square: 60 seconds, or 1 to 10 minutes. Announces it with TTS in the text chat of Town Square and the mapped rooms, and by DM to every village player, then warns again 30 seconds before the end. When time's up, moves every village player in voice (not the Storyteller) into Town Square and reports in the admin channel, naming anyone not in voice. Refused while a countdown is running. |
+| `!botc gather cancel` | Stops the countdown and tells the same channels and players the gathering is off. |
 
 Replies to a command always go to the channel the command was sent in, which is the admin channel except for `register`, `ping` and refusals.
 
@@ -245,21 +248,21 @@ Game state, including the village's player list and characters, is kept in memor
 
 This section summarises each feature. The detailed intended behaviour, open questions and decisions for each one are in its spec under [docs/specs/](docs/specs/) (see [Feature specs](#feature-specs)). For how the built features work at runtime, see the [UML diagrams](#uml-diagrams).
 
-### Gathering Players for the Tribunal
+### Gathering Players in Town Square
 
-Status: IN PROGRESS
+Status: DONE
 
 Spec: [gather.md](docs/specs/gather.md)
 
 ```shell
 !botc gather
+!botc gather 5
+!botc gather cancel
 ```
 
-During the NIGHT phase, all players are placed into individually allocated "Cottage-XX" voice channels.  At the end of the night phase, the Storyteller needs the ability to draw all players into the "Town Square" voice channel for the DAY phase.
+At the end of the NIGHT phase, and when the town gathers for nominations, the Storyteller needs everyone back in the "Town Square" voice channel - *some* players have the tendency to dilly dally in the side channels.
 
-Also, at the end of the DAY phase when the town gathers for nominations - *some* players have the tendency to dilly dally in the side channels, this will forceably move the players into "Town Square".
-
-Done so far: game registration with the sender as Storyteller (`!botc register`), mapping the village's voice channels (`!botc map`), and the player list (`!botc village`). Still to do: moving players, the `gather` command itself and "Cottage-XX" channels.
+`gather` starts a countdown: 60 seconds by default, or the number of minutes given. The bot announces in text and TTS in the voice channels, and by DM to every player, that the Storyteller will be bringing everyone back to Town Square. It warns again 30 seconds before the end, then forcibly moves every player into "Town Square". `gather cancel` calls it off.
 
 ### Sending Players to Sleep
 

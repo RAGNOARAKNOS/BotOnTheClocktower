@@ -2,7 +2,7 @@
 
 How the bot works at runtime, drawn as UML **activity diagrams** (the steps and decisions inside one piece of code) and **sequence diagrams** (who calls whom, and in what order: the Storyteller, the bot, the Discord API and the players).
 
-These diagrams describe the code as it is now. For what the bot *does*, see the [project README](../../README.md). For what features are *meant* to do, including features not built yet, see the [feature specs](../specs/README.md). Planned features (`gather`, `bedtime`, OBS) have no diagrams until they're built.
+These diagrams describe the code as it is now. For what the bot *does*, see the [project README](../../README.md). For what features are *meant* to do, including features not built yet, see the [feature specs](../specs/README.md). Planned features (`bedtime`, OBS) have no diagrams until they're built.
 
 All diagrams are written in [Mermaid](https://mermaid.js.org/), which GitHub renders directly in Markdown. To preview them locally, use a Markdown previewer with Mermaid support, e.g. the VS Code extension *Markdown Preview Mermaid Support*.
 
@@ -15,6 +15,7 @@ All diagrams are written in [Mermaid](https://mermaid.js.org/), which GitHub ren
 | [game-lifecycle.md](game-lifecycle.md) | `register`, `unregister` | `register`, `unregister`, `map`, `sitrep` |
 | [village.md](village.md) | `village` dispatch, `create`, `add`, `remove` | `village create` |
 | [characters.md](characters.md) | `character assign`, `kill`/`revive`, `ghostvote`, `team`, `announce` | `announce`, `send`, `grimoire`, `whisper` |
+| [gather.md](gather.md) | `gather` | `gather` countdown, `gather cancel` |
 
 ## Notation
 
@@ -74,11 +75,12 @@ Which diagram covers which code. When you change one of these functions, update 
 | `characterSend`, `sendDM`, `dmEmbed`, `dmErrorReason` | [characters.md](characters.md) |
 | `characterList`, `grimoireSummary`, `grimoireLine`, `chunkLines` | [characters.md](characters.md) |
 | `whisper`, `parseWhisper` | [characters.md](characters.md) |
+| `gather`, `parseGather`, `gatherCancel`, `gatherFire`, `gatherWarn`, `gatherMove`, `gatherAnnounce`, `gatherCountdown`, `Game.villageChannels` | [gather.md](gather.md) |
 
 **Not diagrammed:** these are too simple to need a diagram, or aren't used yet. If one of them becomes part of a command's flow, add it to the table above.
 
 - `villageList`, `characterClear`: a single loop and a reply.
-- `sortedNames`, `sortedPlayerIDs`, `playerName`, `ghostVoteState`: formatting helpers.
+- `sortedNames`, `sortedPlayerIDs`, `playerName`, `ghostVoteState`, `formatCountdown`, `plural`, `failureList`: formatting helpers.
 - `reply`, `send`: send a message and log any failure. `missingPermissions`, `isVillageRoom`, `botUserID`: small helpers for `channelAccessWarning`. `ping`: sends `pong`.
 
 ## Keeping the diagrams up to date
@@ -98,9 +100,9 @@ Which diagram covers which code. When you change one of these functions, update 
 5. **Update the diagrams.** Change only what the code change affects: new or removed branches, guards, Discord calls, state changes and reply text. Follow the [notation](#notation). A change that doesn't alter a flow (a renamed local variable, debug output) needs no diagram change.
 6. **Deal with code missing from the source map.** A new command, or a function that is now part of a command's flow, gets a diagram (in the file that fits, or in a new file added to [Diagrams](#diagrams)) and a source-map row. A trivial helper goes on the *Not diagrammed* list. If a function was removed or renamed, update or remove its rows.
 7. **Update `Last checked against code:`** in every diagram file you reviewed: today's date and `git rev-parse --short HEAD`.
-8. **Validate.** Render each file you changed. Either:
-   - `docker run --rm -v "$PWD/docs/uml:/data" minlag/mermaid-cli -i /data/<file>.md -o /tmp/<file>.md` (on Git Bash for Windows, put `MSYS_NO_PATHCONV=1` in front), or
-   - `npx -y @mermaid-js/mermaid-cli -i docs/uml/<file>.md -o <temp dir>/<file>.md`.
+8. **Validate.** Render each file you changed, in Docker (preferred, so mermaid-cli isn't installed on the host):
+   - `docker run --rm -v "$PWD/docs/uml:/data" minlag/mermaid-cli -i /data/<file>.md -o /tmp/<file>.md` (on Git Bash for Windows, put `MSYS_NO_PATHCONV=1` in front).
+   - Only if Docker isn't available and the user agrees: `npx -y @mermaid-js/mermaid-cli -i docs/uml/<file>.md -o <temp dir>/<file>.md`.
 
    Fix any parse errors. Common causes: a node ID called `end`, double quotes or `<`/`>` inside a label, or a `;` in a sequence-diagram message.
 9. **Keep the other docs in step.** If a command was added or removed, check that the project README's Commands table and `.github/copilot-instructions.md` agree.
