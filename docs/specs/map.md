@@ -48,12 +48,12 @@ Steps:
 - Should the result be posted to the admin channel, e.g. found/missing locations?
 - Keep the TTS announcement, or use a plain message?
 - Should this run automatically as part of `register`?
-- Where do the "Cottage-XX" channels fit, since `gather` and `bedtime` depend on them?
 
 ## Decisions
 
 - 2026-09-26: `map` no longer lists or touches players. The player list is built by `!botc village create` ([village-management.md](village-management.md)), and `map` used to wipe it.
 - 2026-09-26: Storyteller only, from the admin channel, like every command (was: anyone, anywhere). With no game registered it's now ignored rather than replying "No game registered".
+- 2026-09-27: No "Cottage-XX" channels. The village is just the rooms in `villageCodeLookup`, and the planned `bedtime` command, which relied on cottages, is dropped.
 
 ## Implementation
 

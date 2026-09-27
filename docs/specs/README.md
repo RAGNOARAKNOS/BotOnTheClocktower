@@ -33,7 +33,6 @@ Status values: **IDEA** (not yet shaped) â†’ **PLANNED** (agreed, not started) â
 
 | Spec | Command | Status |
 | --- | --- | --- |
-| [bedtime.md](bedtime.md) | `!botc bedtime` | PLANNED |
 | [obs-integration.md](obs-integration.md) | `!botc obs ...` | PLANNED (detailed in [roadmap.md](../roadmap.md)) |
 | [vote-tracking.md](vote-tracking.md) | TBD | IDEA |
 | [game-visualisation.md](game-visualisation.md) | TBD | IDEA |

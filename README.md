@@ -264,18 +264,6 @@ At the end of the NIGHT phase, and when the town gathers for nominations, the St
 
 `gather` starts a countdown: 60 seconds by default, or the number of minutes given. The bot announces in text and TTS in the voice channels, and by DM to every player, that the Storyteller will be bringing everyone back to Town Square. It warns again 30 seconds before the end, then forcibly moves every player into "Town Square". `gather cancel` calls it off.
 
-### Sending Players to Sleep
-
-Status: PLANNED
-
-Spec: [bedtime.md](docs/specs/bedtime.md)
-
-```shell
-!botc bedtime
-```
-
-At the end of the DAY phase, all players need to be placed into their respective "Cottage-XX" voice channel.
-
 ### Village Creation & Management
 
 Status: DONE

@@ -100,7 +100,7 @@ Define a set of named OBS scenes (configurable, not hardcoded) that the bot swit
 | Game Event | OBS Scene (default name) |
 |---|---|
 | Game registered | `BOTC - Lobby` |
-| Night begins (bedtime) | `BOTC - Night` |
+| Night begins | `BOTC - Night` |
 | Day begins (wake) | `BOTC - Day` |
 | Nomination open | `BOTC - Nomination` |
 | Game over | `BOTC - End` |
@@ -108,7 +108,7 @@ Define a set of named OBS scenes (configurable, not hardcoded) that the bot swit
 - [ ] Add `OBS_SCENE_*` env vars for each scene name (so OBS scene names don't need to match exactly)
 - [ ] Hook into existing phase transition points in `bot.go`:
   - After `register()` succeeds → switch to lobby scene
-  - When bedtime command fires → switch to night scene
+  - Night begins → switch to night scene (trigger undecided: the planned `bedtime` command was dropped)
   - When wake command fires → switch to day scene
 - [ ] All hooks wrapped in `IsConnected()` guard — missing OBS is a warning, not an error
 

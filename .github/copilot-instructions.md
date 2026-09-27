@@ -24,7 +24,7 @@ Commit messages follow `.github/commit-message-instructions.md` (Copilot's commi
 
 ## What this is
 
-A Discord bot (Go, [discordgo](https://github.com/bwmarrin/discordgo)) that helps the Storyteller run a game of *Blood on the Clocktower* over Discord — mainly by moving players between voice channels ("Town Square", cottages, etc.) as the game switches between DAY and NIGHT phases. It's an early-stage personal project; most features in the README are PLANNED or IN WORK.
+A Discord bot (Go, [discordgo](https://github.com/bwmarrin/discordgo)) that helps the Storyteller run a game of *Blood on the Clocktower* over Discord — mainly by managing the village, sending players their secret characters, and moving players between voice channels (such as gathering them in "Town Square"). It's an early-stage personal project; most features in the README are PLANNED or IN WORK.
 
 ## Commands
 
@@ -81,7 +81,6 @@ This section covers the architecture and the rules to keep. For what each comman
 - **Game rules are `Game` methods** in `game.go` (`ReplacePlayers`, `RemovePlayer`, `Assign`, `SetTeam`, `SetAlive`, `ToggleGhostVote`, `MarkAnnounced`, `PendingLifeChanges`). They change only the `Game`, never Discord, and are tested in `game_test.go`. Handlers do the Discord side and build replies; put new rules on `Game`, not in a handler.
 - **Game state is in-memory only** in `Bot.game` (`nil` = no game registered) and is lost on restart. Only touch it from within command handling, where `Bot.mu` is held; add locking if you ever read it from another handler or goroutine.
 - **Adding a command** is one entry in the `commands` table in `commands.go`. By default it's Storyteller-only, from the admin channel, with a game registered; set `beforeGame` or `anyChannel` only when the spec says so, and add a case to `TestAllowed` if the access is new. Handlers need no access check of their own.
-- **Incomplete pieces:** `villageCodeLookup` has no "Cottage-XX" entries even though the planned features rely on them.
 - **Error handling:** don't `panic`; return errors and reply to the channel. Send replies with `b.reply` (threaded) or `b.send` (plain), which log send failures; don't call `ChannelMessageSend*` directly without checking the error.
 - **UML diagrams:** when you change a function listed in the source map in `docs/uml/README.md`, update the affected diagrams in the same change; when you add a command, add its diagram and a source-map row. The steps, including how to validate the Mermaid, are in that README's *Sync procedure*; `/uml-sync` (Claude Code) and the `uml-sync` prompt (Copilot) run it.
 - **Logging:** use the standard `log` package. Never log message content: whispers and character guidance are secrets.
@@ -101,7 +100,7 @@ Where the roadmap doesn't match the current code:
 
 - It says "add OBS config fields to Settings in config.go"; there's no `Settings` any more. Add them to `config.Config` and pass them to the bot from `main`.
 - It says to gate commands behind a "Storyteller check (same pattern as `register`)". No per-command check is needed: an `obs` entry in the `commands` table is Storyteller-only, from the admin channel, by default.
-- Phase 3 hooks into bedtime/wake commands that don't exist yet.
+- Phase 3 hooks into night and day phase changes. `gather` could mark daybreak, but no command marks nightfall (the planned `bedtime` command was dropped).
 
 ## CI/CD
 

@@ -2,7 +2,7 @@
 
 How the bot works at runtime, drawn as UML **activity diagrams** (the steps and decisions inside one piece of code) and **sequence diagrams** (who calls whom, and in what order: the Storyteller, the bot, the Discord API and the players).
 
-These diagrams describe the code as it is now. For what the bot *does*, see the [project README](../../README.md). For what features are *meant* to do, including features not built yet, see the [feature specs](../specs/README.md). Planned features (`bedtime`, OBS) have no diagrams until they're built.
+These diagrams describe the code as it is now. For what the bot *does*, see the [project README](../../README.md). For what features are *meant* to do, including features not built yet, see the [feature specs](../specs/README.md). Planned features (OBS) have no diagrams until they're built.
 
 All diagrams are written in [Mermaid](https://mermaid.js.org/), which GitHub renders directly in Markdown. To preview them locally, use a Markdown previewer with Mermaid support, e.g. the VS Code extension *Markdown Preview Mermaid Support*.
 
