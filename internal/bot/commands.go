@@ -53,9 +53,9 @@ var commands = map[string]command{
 	"gather":     {run: (*Bot).gather},
 }
 
-// extractCommand runs the command named by the second word, if the sender may run it.
+// runCommand runs the command named by the second word, if the sender may run it.
 // It returns false if the command was ignored without a reply.
-func (b *Bot) extractCommand(req *request) (answered bool) {
+func (b *Bot) runCommand(req *request) (answered bool) {
 	name := strings.ToLower(req.words[1])
 	cmd, known := commands[name]
 
@@ -129,4 +129,12 @@ func (b *Bot) send(channelID, text string) {
 	if _, err := b.discord.ChannelMessageSend(channelID, text); err != nil {
 		log.Printf("Could not post in channel %s: %v", channelID, err)
 	}
+}
+
+// listLine formats a reply line such as "\nSkipped: Alice, Bob", or "" if there are no items.
+func listLine(label string, items []string) string {
+	if len(items) == 0 {
+		return ""
+	}
+	return "\n" + label + ": " + strings.Join(items, ", ")
 }

@@ -29,7 +29,7 @@ This is a personal project, and is no way affiliated with "The Pandemonium Insti
 
 Register the bot application within your Discord developer page [on the dev page](https://discord.com/developers/applications) and make a note of your Discord BOT API token (in the BOT page).
 
-The bot requests all gateway intents, so on the BOT page you must enable all three **Privileged Gateway Intents** (Presence, Server Members and Message Content). If you don't, Discord refuses the connection, and without Message Content the bot can't read commands.
+On the BOT page, enable two of the **Privileged Gateway Intents**: **Server Members** and **Message Content**. The bot doesn't use Presence, so that one can stay off. If a needed intent is off, Discord refuses the connection, and without Message Content the bot can't read commands.
 
 ### Server Setup (for Discord moderators)
 
@@ -378,6 +378,6 @@ Keeping them current:
 
 ### Anatomy of a command
 
-Messages are split into words with [`strings.Fields`](https://pkg.go.dev/strings#Fields). If the first word is `!botc` (ignoring case) and there is at least one more word, the second word is the command name, dispatched in `extractCommand` in [internal/bot/commands.go](internal/bot/commands.go). Any further words are available as arguments. Handlers receive a `request`, which `newMessage` builds from a message and `interaction` builds from a `/botc` slash command ([internal/bot/interactions.go](internal/bot/interactions.go)), turning its options into the same words. [command-dispatch.md](docs/uml/command-dispatch.md) shows the whole flow.
+Messages are split into words with [`strings.Fields`](https://pkg.go.dev/strings#Fields). If the first word is `!botc` (ignoring case) and there is at least one more word, the second word is the command name, dispatched in `runCommand` in [internal/bot/commands.go](internal/bot/commands.go). Any further words are available as arguments. Handlers receive a `request`, which `newMessage` builds from a message and `interaction` builds from a `/botc` slash command ([internal/bot/interactions.go](internal/bot/interactions.go)), turning its options into the same words. [command-dispatch.md](docs/uml/command-dispatch.md) shows the whole flow.
 
 <https://www.educative.io/answers/how-to-split-a-string-in-golang>

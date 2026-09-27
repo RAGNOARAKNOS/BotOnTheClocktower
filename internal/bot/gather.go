@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -119,22 +118,14 @@ func (b *Bot) gatherCancel(req *request) {
 	req.reply("Gathering cancelled." + failureList(failures))
 }
 
-// gatherFire runs a countdown step from its timer. It holds Bot.mu like a command,
-// and does nothing if the game was unregistered or replaced, or the countdown cancelled.
+// gatherFire runs a countdown step from its timer, like a command, and does nothing
+// if the game was unregistered or replaced, or the countdown cancelled.
 func (b *Bot) gatherFire(game *Game, c *gatherCountdown, step string, run func()) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	defer func() {
-		if r := recover(); r != nil {
-			log.Printf("Recovered from panic in the gather %s: %v\n%s", step, r, debug.Stack())
+	b.locked("the gather "+step, nil, func() {
+		if b.game == game && game.gather == c {
+			run()
 		}
-	}()
-
-	if b.game != game || game.gather != c {
-		return
-	}
-	run()
+	})
 }
 
 // gatherWarn sends the second warning, reporting any failures in the admin channel.
@@ -153,7 +144,7 @@ func (b *Bot) gatherMove() {
 
 	var moved int
 	var notInVoice, failed []string
-	for _, id := range b.sortedPlayerIDs() {
+	for _, id := range b.game.sortedPlayerIDs() {
 		if id == game.StorytellerID {
 			continue
 		}
@@ -175,12 +166,7 @@ func (b *Bot) gatherMove() {
 	}
 
 	report := fmt.Sprintf("Gathered %d player(s) in Town Square.", moved)
-	if len(notInVoice) > 0 {
-		report += "\nNot in voice, so not moved: " + strings.Join(notInVoice, ", ")
-	}
-	if len(failed) > 0 {
-		report += "\nCould not move: " + strings.Join(failed, ", ")
-	}
+	report += listLine("Not in voice, so not moved", notInVoice) + listLine("Could not move", failed)
 	b.send(game.AdminChannelID, report)
 }
 
@@ -193,7 +179,7 @@ func (b *Bot) gatherAnnounce(text string) (failures []string) {
 			failures = append(failures, fmt.Sprintf("could not post in <#%s> (%v)", channelID, err))
 		}
 	}
-	for _, id := range b.sortedPlayerIDs() {
+	for _, id := range b.game.sortedPlayerIDs() {
 		if err := b.sendDM(id, b.dmEmbed("Gathering in Town Square", text)); err != nil {
 			log.Printf("Could not DM the gathering announcement to %s: %v", id, err)
 			failures = append(failures, fmt.Sprintf("could not DM %s (%s)", b.game.Players[id], dmErrorReason(err)))

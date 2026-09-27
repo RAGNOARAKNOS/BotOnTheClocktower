@@ -26,4 +26,4 @@ The reply is a plain message in the same channel, not a threaded reply.
 
 ## Implementation
 
-- `extractCommand` in [internal/bot/commands.go](../../internal/bot/commands.go).
+- `runCommand` in [internal/bot/commands.go](../../internal/bot/commands.go).

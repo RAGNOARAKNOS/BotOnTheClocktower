@@ -13,8 +13,8 @@ func (b *Bot) characterList(req *request) {
 		return
 	}
 
-	lines := []string{"Grimoire: " + grimoireSummary(b.game.Players, b.game.Characters)}
-	for i, id := range b.sortedPlayerIDs() {
+	lines := []string{"Grimoire: " + grimoireSummary(b.game)}
+	for i, id := range b.game.sortedPlayerIDs() {
 		line := fmt.Sprintf("%d. %s: ", i+1, b.game.Players[id])
 		if c, ok := b.game.Characters[id]; ok {
 			line += grimoireLine(c)
@@ -60,10 +60,10 @@ func grimoireLine(c *Character) string {
 }
 
 // grimoireSummary totals the characters, e.g. "Alive 6/8 · Good 5 · Evil 3 · 1 change not yet announced".
-func grimoireSummary(players map[string]string, chars map[string]*Character) string {
+func grimoireSummary(g *Game) string {
 	alive, good, evil, pending := 0, 0, 0, 0
-	for id := range players {
-		c, ok := chars[id]
+	for id := range g.Players {
+		c, ok := g.Characters[id]
 		if !ok {
 			continue
 		}
@@ -81,7 +81,7 @@ func grimoireSummary(players map[string]string, chars map[string]*Character) str
 	}
 
 	summary := fmt.Sprintf("Alive %d/%d · Good %d · Evil %d", alive, good+evil, good, evil)
-	if unassigned := len(players) - (good + evil); unassigned > 0 {
+	if unassigned := len(g.Players) - (good + evil); unassigned > 0 {
 		summary += fmt.Sprintf(" · %d without a character", unassigned)
 	}
 	if pending > 0 {
@@ -104,9 +104,7 @@ func chunkLines(lines []string, limit int) []string {
 	var chunks []string
 	var sb strings.Builder
 	for _, line := range lines {
-		if len(line) > limit {
-			line = line[:limit]
-		}
+		line = truncate(line, limit)
 		if sb.Len() > 0 && sb.Len()+1+len(line) > limit {
 			chunks = append(chunks, sb.String())
 			sb.Reset()

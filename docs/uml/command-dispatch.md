@@ -2,13 +2,13 @@
 
 [← UML index](README.md)
 
-How a `!botc` message or a `/botc` slash command becomes a command. Covers `newMessage` and `messageRequest` in [internal/bot/bot.go](../../internal/bot/bot.go); `extractCommand`, `dispatch`, the `commands` table and `allowed` in [internal/bot/commands.go](../../internal/bot/commands.go); and `interaction`, `slashCommand`, `modalSubmit`, `runSlash` and `slashResponder` in [internal/bot/interactions.go](../../internal/bot/interactions.go), with `slashWords` and `modalCommand` in [internal/bot/slash.go](../../internal/bot/slash.go).
+How a `!botc` message or a `/botc` slash command becomes a command. Covers `newMessage`, `locked` and `messageRequest` in [internal/bot/bot.go](../../internal/bot/bot.go); `runCommand`, `dispatch`, the `commands` table and `allowed` in [internal/bot/commands.go](../../internal/bot/commands.go); and `interaction`, `slashCommand`, `modalSubmit`, `runSlash` and `slashResponder` in [internal/bot/interactions.go](../../internal/bot/interactions.go), with `slashWords` and `modalCommand` in [internal/bot/slash.go](../../internal/bot/slash.go).
 
-Both forms build a `request` (the sender, server, channel, command words, raw text, mentioned users, and how to reply) and run the same handler through `extractCommand`, so handlers never know which form a command came from.
+Both forms build a `request` (the sender, server, channel, command words, raw text, mentioned users, and how to reply) and run the same handler through `runCommand`, so handlers never know which form a command came from.
 
 ## Activity: handling a message
 
-discordgo calls `newMessage` in its own goroutine for every message the bot can see. `Bot.mu` lets only one command run at a time. The deferred `recover` means a bug in one command doesn't crash the bot and lose the game in memory. Each command's entry in the `commands` table says who may run it and where, and `allowed` checks that before it runs, so the command handlers make no access checks of their own. Aliases, such as `start` for `register`, are extra entries pointing at the same handler.
+discordgo calls `newMessage` in its own goroutine for every message the bot can see. It runs the command through `locked`, which holds `Bot.mu` so only one command runs at a time, and defers a `recover` so a bug in one command doesn't crash the bot and lose the game in memory. Each command's entry in the `commands` table says who may run it and where, and `allowed` checks that before it runs, so the command handlers make no access checks of their own. Aliases, such as `start` for `register`, are extra entries pointing at the same handler.
 
 ```mermaid
 flowchart TD
@@ -18,9 +18,9 @@ flowchart TD
     d1 -->|"[human author]"| split("Split the content into words<br/>(strings.Fields)")
     split --> d2{" "}
     d2 -->|"[fewer than 2 words, or the first isn't !botc]"| ignored
-    d2 -->|"[!botc command]"| lock("Lock Bot.mu<br/>Defer recover")
+    d2 -->|"[!botc command]"| lock("locked: lock Bot.mu<br/>Defer recover")
     lock --> build("messageRequest: build a request<br/>(replies threaded to the message)")
-    build --> lookup("extractCommand: look up the lower-cased 2nd word<br/>in the commands table (unknown: no flags)")
+    build --> lookup("runCommand: look up the lower-cased 2nd word<br/>in the commands table (unknown: no flags)")
     lookup --> allowed("allowed(game, command, sender, server, channel)")
     allowed --> dok{" "}
     dok -->|"[not allowed, no refusal]"| ign("Log: Ignoring, no game registered")
@@ -69,7 +69,7 @@ sequenceDiagram
     else !botc command
         critical Bot.mu held for the whole command
             Note over Bot: messageRequest(message, words)
-            Bot->>+Handler: extractCommand(request)
+            Bot->>+Handler: runCommand(request)
             Note over Handler: Look up the command, then allowed(...)
             alt no game registered, and the command isn't marked beforeGame
                 Note over Handler: Ignore, log to the console only
@@ -99,7 +99,7 @@ discordgo calls `interaction` for every interaction. Discord needs an answer wit
 flowchart TD
     start((" ")):::initial --> d1{" "}
     d1 -->|"[not in a server, not /botc, or not one of the bot's forms]"| ignored(((" "))):::final
-    d1 -->|"[/botc command or bot form]"| lock("Lock Bot.mu<br/>Defer recover")
+    d1 -->|"[/botc command or bot form]"| lock("locked: lock Bot.mu<br/>Defer recover")
     lock --> kind{" "}
     kind -->|"[slash command]"| words("slashWords: options to words<br/>and mentioned user IDs")
     words --> form{" "}
@@ -111,7 +111,7 @@ flowchart TD
     kind -->|"[form submitted]"| mc("modalCommand: form to words<br/>and raw text for parse.go")
     mc --> ack
     ack --> resolve("resolveUsers: mentioned IDs to users")
-    resolve --> ext("extractCommand(request):<br/>allowed, then the handler")
+    resolve --> ext("runCommand(request):<br/>allowed, then the handler")
     ext --> d3{" "}
     d3 -->|"[ignored: no game registered]"| nogame("Reply: No game registered")
     d3 -->|"[ran or refused]"| d4{" "}
@@ -146,7 +146,7 @@ sequenceDiagram
         Note over Bot: slashWords: /botc village add, mentions Alice and Bob
         Bot->>REST: InteractionRespond(deferred, ephemeral)
         REST-->>ST: thinking… (only the Storyteller sees it)
-        Bot->>+Handler: extractCommand(request)
+        Bot->>+Handler: runCommand(request)
         Handler->>REST: Any Discord calls the command needs
         Handler->>REST: InteractionResponseEdit(reply)
         opt more replies, e.g. a long grimoire
@@ -181,7 +181,7 @@ sequenceDiagram
     critical Bot.mu
         Note over Bot: modalCommand: words /botc whisper,<br/>text is Alice's mention then the message
         Bot->>REST: InteractionRespond(deferred, ephemeral)
-        Bot->>+Handler: extractCommand(request), which checks allowed again
+        Bot->>+Handler: runCommand(request), which checks allowed again
         Handler->>REST: DM Alice the message
         REST-->>Player: DM
         Handler->>REST: InteractionResponseEdit(Whispered to Alice.)
@@ -196,7 +196,7 @@ A pure function: it makes no Discord calls, so `commands_test.go` covers every c
 - `beforeGame` (`register`, `start`, `ping`): anyone may run it, from any channel, while no game is registered.
 - `anyChannel` (`ping`): the Storyteller may run it outside the admin channel.
 
-`extractCommand` logs an ignored command and replies with a refusal. For a slash command, an ignored command gets a "No game registered" reply instead, because Discord needs every slash command answered.
+`runCommand` logs an ignored command and replies with a refusal. For a slash command, an ignored command gets a "No game registered" reply instead, because Discord needs every slash command answered.
 
 ```mermaid
 flowchart TD
@@ -217,4 +217,4 @@ flowchart TD
 
 ---
 
-Last checked against code: 2026-09-27 (b1fa7f3)
+Last checked against code: 2026-09-27 (f7831d7)

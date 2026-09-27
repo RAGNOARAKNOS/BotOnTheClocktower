@@ -2,7 +2,7 @@
 
 [← UML index](README.md)
 
-Starting and ending a game, and the commands that report on it or prepare it. Covers `register`, `unregister`, `removeGameRoles`, `mapRooms`, `sitrep` and their helpers in [internal/bot/game.go](../../internal/bot/game.go) and [internal/bot/roles.go](../../internal/bot/roles.go). The bot runs one game at a time.
+Starting and ending a game, and the commands that report on it or prepare it. Covers `register`, `unregister`, `mapRooms`, `sitrep` and their helpers in [internal/bot/lifecycle.go](../../internal/bot/lifecycle.go), `newGame` and `villageRooms` in [internal/bot/game.go](../../internal/bot/game.go), and `removeGameRoles` in [internal/bot/roles.go](../../internal/bot/roles.go). The bot runs one game at a time.
 
 Every command here has already passed [`allowed`](command-dispatch.md#activity-allowed): `register` runs from anywhere when no game is registered, and everything else, including `register` once a game exists, only runs for the Storyteller in the admin channel.
 
@@ -130,23 +130,23 @@ sequenceDiagram
 
 ## Sequence: `map`
 
-`map` finds the village's voice channels by name (see `villageCodeLookup`) and stores their IDs in `Game.Rooms`. It doesn't move anyone.
+`map` finds the village's voice channels by name (see `villageCodeLookup`) and stores their IDs in `Game.Rooms`. Only voice channels count, and if several share a name the first wins, as in `register`, so Town Square's ID is always the game channel. It doesn't move anyone.
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor ST as Storyteller
-    participant Bot as Bot (extractCommand, mapRooms)
+    participant Bot as Bot (runCommand, mapRooms)
     participant REST as Discord REST API
 
     ST->>Bot: !botc map (from the admin channel)
-    Bot->>REST: GuildChannels(guild), in getMapGuildChannels
+    Bot->>REST: GuildChannels(guild)
     alt request failed
         REST-->>Bot: Error
         Bot->>REST: Reply "Could not map the town's channels..."
     else channels returned
         REST-->>Bot: Channels
-        Note over Bot: Game.Rooms = code → channel ID<br/>for each name in villageCodeLookup (TS, CA, CF, PS, TW, RS, SC)
+        Note over Bot: villageRooms: Game.Rooms = code → the first voice channel<br/>with each name in villageCodeLookup (TS, CA, CF, PS, TW, RS, SC)
         Bot->>REST: ChannelMessageSendTTS(admin channel, "Town Locations Mapped")
     end
 ```
@@ -169,4 +169,4 @@ sequenceDiagram
 
 ---
 
-Last checked against code: 2026-09-27 (b661eed)
+Last checked against code: 2026-09-27 (f7831d7)

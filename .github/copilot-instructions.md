@@ -36,7 +36,7 @@ go vet ./...
 docker build -t botontheclocktower .               # container image (distroless, nonroot)
 ```
 
-Configuration: `BOTAPIKEY` (Discord bot token), read from the environment or from an optional `.env` file in the working directory. `.env` is gitignored — never commit it or print the token.
+Configuration: `BOTAPIKEY` (Discord bot token, required), read from the environment or from an optional `.env` file in the working directory. `.env` is gitignored — never commit it or print the token.
 
 **Prefer tools in Docker.** For anything beyond Go and git (for example mermaid-cli, linters or Node-based tools), run it in a container with `docker run --rm ...` rather than installing it, or running it through `npx`, on the host. This keeps extra tools off the operating system. If Docker isn't running, ask the user to start it rather than installing the tool locally. On Git Bash for Windows, put `MSYS_NO_PATHCONV=1` in front of `docker run` so volume paths aren't mangled.
 
@@ -45,11 +45,11 @@ Configuration: `BOTAPIKEY` (Discord bot token), read from the environment or fro
 - `cmd/bot/main.go` — entry point: `config.Load()` then `bot.Run(cfg.Token)`.
 - `internal/config/config.go` — loads `.env` (a missing file is fine) and returns a `Config` holding the bot token.
 - `internal/bot/` — one package, one file per feature. Keep files under about 300 lines; add a new file for a new feature.
-  - `bot.go` — the `Bot` struct, `Run` (session setup) and `newMessage` (lock, recover).
-  - `commands.go` — `request` (one command, from either form), the `commands` table (name and alias → handler plus access flags), `extractCommand` and `dispatch`, `allowed` (access), `ping`, and the `reply`/`send` helpers.
+  - `bot.go` — the `Bot` struct, `Run` (session setup), `newMessage`, and `locked` (takes `Bot.mu`, recovers panics).
+  - `commands.go` — `request` (one command, from either form), the `commands` table (name and alias → handler plus access flags), `runCommand` and `dispatch`, `allowed` (access), `ping`, and the `reply`/`send`/`listLine` helpers.
   - `slash.go` — the `/botc` definition, and turning slash options and submitted forms into `!botc`-style words and text. `interactions.go` — registering `/botc` and handling interactions (acknowledge within 3 seconds, ephemeral replies, forms).
-  - `game.go` — `Game` (the registered game's state), `register`, `unregister`, `sitrep`, `map`.
-  - `village.go` — the `village` commands. `roles.go` — Discord role lookups and changes. `discord.go` — member and channel lookups. `permissions.go` — what the bot needs in each game channel, checked by `register`.
+  - `game.go` — `Game` (the registered game's state) and its rules, `villageCodeLookup` and `villageRooms`; no Discord calls. `lifecycle.go` — `register`, `unregister`, `sitrep`, `map`.
+  - `village.go` — the `village` commands. `roles.go` — Discord role lookups and changes. `discord.go` — member and channel lookups, Discord's size limits, `truncate`. `permissions.go` — what the bot needs in each game channel, checked by `register`.
   - `characters.go` — the `character` commands and `Character`. `grimoire.go` — `character list`/`grimoire` output. `whisper.go` — `whisper` and the DM helpers. `gather.go` — the `gather` countdown (timers that take `Bot.mu` when they fire).
   - `parse.go` — parsing raw message content (mentions, assignments, whispers). Tests sit next to the code: `parse_test.go`, `grimoire_test.go`, `characters_test.go`.
 - `docs/uml/` — Mermaid UML activity and sequence diagrams of how the code works at runtime, with a source map from Go functions to diagrams.
@@ -68,7 +68,7 @@ Intended behaviour lives in `docs/specs/`, one file per feature (index and workf
 
 This section covers the architecture and the rules to keep. For what each command does, see the README's Commands table; for step-by-step flows, see `docs/uml/`; for intended behaviour, see `docs/specs/`. Don't re-describe individual commands here.
 
-- **Flow:** `bot.Run` opens the discordgo session and blocks until SIGINT/SIGTERM. `newMessage` ignores bots, needs `!botc` (any case) plus a command word, takes `Bot.mu` for the whole command, and recovers panics. `interaction` does the same for `/botc` slash commands. Both build a `request`, and `extractCommand` looks the command up in the `commands` table, checks `allowed`, then calls the handler.
+- **Flow:** `bot.Run` opens the discordgo session and blocks until SIGINT/SIGTERM. `newMessage` ignores bots, needs `!botc` (any case) plus a command word, and runs the command through `locked`, which holds `Bot.mu` for the whole command and recovers panics. `interaction` does the same for `/botc` slash commands. Both build a `request`, and `runCommand` looks the command up in the `commands` table, checks `allowed`, then calls the handler.
 - **Two forms, in parity:** every command works as `!botc` and as `/botc`, permanently. Slash options are turned into the same words and text as `!botc` (`slashWords`, `modalCommand`), so both run the same handler; handlers never know which form they came from. Slash replies are ephemeral. `TestSlashParity` fails if the two drift apart.
 - **One command at a time:** `Bot.mu` is held for the whole command, because discordgo runs each handler in its own goroutine. Don't call anything that re-enters the message handler while holding it.
 - **Access** is decided once, by `allowed`, from the command's table entry. With no game registered, only `beforeGame` commands (`register`/`start`, `ping`) run, and everything else is ignored silently. With a game, only the Storyteller in the admin channel may run commands (`anyChannel` commands, such as `ping`, from anywhere); anyone else gets a refusal.
@@ -80,7 +80,7 @@ This section covers the architecture and the rules to keep. For what each comman
 ## Things to know before changing code
 
 - **Keep the README in step.** Every command is `!botc <command>`, and also `/botc <command>`. When you add or change a command, update the README's Commands table (and its Features section if the feature's status changes).
-- **Game rules are `Game` methods** in `game.go` (`ReplacePlayers`, `RemovePlayer`, `Assign`, `SetTeam`, `SetAlive`, `ToggleGhostVote`, `MarkAnnounced`, `PendingLifeChanges`). They change only the `Game`, never Discord, and are tested in `game_test.go`. Handlers do the Discord side and build replies; put new rules on `Game`, not in a handler.
+- **Game rules are `Game` methods** in `game.go` (`ReplacePlayers`, `AddPlayer`, `RemovePlayer`, `Assign`, `ClearCharacter`, `MarkSent`, `SetTeam`, `SetAlive`, `ToggleGhostVote`, `MarkAnnounced`, `PendingLifeChanges`). They change only the `Game`, never Discord, and are tested in `game_test.go`. Handlers do the Discord side and build replies; put new rules on `Game`, not in a handler.
 - **Game state is in-memory only** in `Bot.game` (`nil` = no game registered) and is lost on restart. Only touch it from within command handling, where `Bot.mu` is held; add locking if you ever read it from another handler or goroutine.
 - **Adding a command** is one entry in the `commands` table in `commands.go` (a subcommand: an entry in `villageCommands` or `characterCommands`), plus the matching subcommand in `slashCommands` in `slash.go`, and any new option read in `slashWords`. By default it's Storyteller-only, from the admin channel, with a game registered; set `beforeGame` or `anyChannel` only when the spec says so, and add a case to `TestAllowed` if the access is new. Handlers need no access check of their own.
 - **Error handling:** don't `panic`; return errors and reply to the channel. Send replies with `b.reply` (threaded) or `b.send` (plain), which log send failures; don't call `ChannelMessageSend*` directly without checking the error.
@@ -106,6 +106,7 @@ Where the roadmap doesn't match the current code:
 
 ## CI/CD
 
+- `.github/workflows/ci.yml`: on pushes to `main` and on PRs, checks `gofmt`, runs `go vet`, staticcheck (pinned version) and `go test -race ./...`. To run the race tests locally without cgo on the host: `docker run --rm -v "$PWD:/src" -w /src golang:1.27 go test -race ./...`.
 - `.github/workflows/release.yml`: on push of a `v*` tag, runs `go test ./...`, cross-compiles linux/windows amd64 binaries (`CGO_ENABLED=0`), and creates a GitHub Release with them.
 - `.github/workflows/container.yml`: on a published release, builds the `Dockerfile` and pushes to `ghcr.io/<owner>/botontheclocktower` tagged with the version, `major.minor`, and `latest`.
 - `.github/workflows/docs.yml`: on pushes to `main` and PRs touching Go code or `docs/uml/`, renders every Mermaid diagram with mermaid-cli (a syntax error fails the build) and warns if Go code changed without `docs/uml/` changing.

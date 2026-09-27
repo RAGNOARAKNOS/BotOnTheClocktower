@@ -3,7 +3,6 @@ package bot
 import (
 	"fmt"
 	"log"
-	"runtime/debug"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -43,23 +42,14 @@ func (b *Bot) interaction(s *discordgo.Session, i *discordgo.InteractionCreate) 
 		return
 	}
 
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
 	r := &slashResponder{b: b, i: i.Interaction}
-	defer func() {
-		if rec := recover(); rec != nil {
-			// Log the command name only: the options can hold game secrets.
-			log.Printf("Recovered from panic handling %q: %v\n%s", name, rec, debug.Stack())
-			r.reply("Something went wrong running that command. Check the bot's logs.")
+	b.locked(fmt.Sprintf("command %q", name), func() { r.reply(panicReply) }, func() {
+		if i.Type == discordgo.InteractionApplicationCommand {
+			b.slashCommand(i, r)
+		} else {
+			b.modalSubmit(i, r)
 		}
-	}()
-
-	if i.Type == discordgo.InteractionApplicationCommand {
-		b.slashCommand(i, r)
-	} else {
-		b.modalSubmit(i, r)
-	}
+	})
 }
 
 // slashCommand runs a /botc command through the same handlers as `!botc`.
@@ -119,7 +109,7 @@ func (b *Bot) modalSubmit(i *discordgo.InteractionCreate, r *slashResponder) {
 
 // runSlash runs a request, making sure the slash command always gets an answer.
 func (b *Bot) runSlash(req *request, r *slashResponder) {
-	if !b.extractCommand(req) {
+	if !b.runCommand(req) {
 		r.reply(noGameReply)
 	}
 	if !r.replied {
@@ -154,9 +144,7 @@ func orNoGame(refusal string) string {
 func (b *Bot) resolveUsers(guildID string, ids []string) []*discordgo.User {
 	users := make([]*discordgo.User, 0, len(ids))
 	for _, id := range ids {
-		if m, err := b.discord.State.Member(guildID, id); err == nil && m.User != nil {
-			users = append(users, m.User)
-		} else if m, err := b.discord.GuildMember(guildID, id); err == nil && m.User != nil {
+		if m := b.lookupMember(guildID, id, nil); m != nil {
 			users = append(users, m.User)
 		} else {
 			users = append(users, &discordgo.User{ID: id, Username: "<@" + id + ">"})

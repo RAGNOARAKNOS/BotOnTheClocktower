@@ -52,4 +52,4 @@ Steps:
 
 ## Implementation
 
-- `unregister` in [internal/bot/game.go](../../internal/bot/game.go); `removeGameRoles` in [internal/bot/roles.go](../../internal/bot/roles.go).
+- `unregister` in [internal/bot/lifecycle.go](../../internal/bot/lifecycle.go); `removeGameRoles` in [internal/bot/roles.go](../../internal/bot/roles.go).

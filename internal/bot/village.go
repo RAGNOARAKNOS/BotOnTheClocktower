@@ -49,7 +49,7 @@ func (b *Bot) villageCreate(req *request) {
 
 	players := make(map[string]string)
 	for _, l := range inTownSquare {
-		member := b.lookupMember(l.userID, l.member)
+		member := b.lookupMember(b.game.GuildID, l.userID, l.member)
 		if member != nil && member.User != nil && member.User.Bot {
 			continue
 		}
@@ -66,9 +66,7 @@ func (b *Bot) villageCreate(req *request) {
 	} else {
 		reply = fmt.Sprintf("Village created with %d player(s): %s", len(players), strings.Join(sortedNames(players), ", "))
 	}
-	if len(dropped) > 0 {
-		reply += fmt.Sprintf("\nNo longer in the village: %s", strings.Join(sortedNames(dropped), ", "))
-	}
+	reply += listLine("No longer in the village", sortedNames(dropped))
 	b.replyWithRoleWarning(req, reply, roleErr)
 }
 
@@ -90,23 +88,20 @@ func (b *Bot) villageAdd(req *request) {
 		case b.game.Players[user.ID] != "":
 			skipped = append(skipped, b.game.Players[user.ID]+" (already in the village)")
 		default:
-			added[user.ID] = memberDisplayName(b.lookupMember(user.ID, nil), user.ID)
+			added[user.ID] = memberDisplayName(b.lookupMember(b.game.GuildID, user.ID, nil), user.ID)
 		}
 	}
 
 	roleErr := b.setPlayerRole(added, nil)
 	for id, name := range added {
-		b.game.Players[id] = name
+		b.game.AddPlayer(id, name)
 	}
 
 	reply := fmt.Sprintf("Added %d player(s)", len(added))
 	if len(added) > 0 {
 		reply += ": " + strings.Join(sortedNames(added), ", ")
 	}
-	if len(skipped) > 0 {
-		reply += "\nSkipped: " + strings.Join(skipped, ", ")
-	}
-	b.replyWithRoleWarning(req, reply, roleErr)
+	b.replyWithRoleWarning(req, reply+listLine("Skipped", skipped), roleErr)
 }
 
 // villageRemove removes each mentioned user from the village and takes BoTC-Player away.
@@ -136,10 +131,7 @@ func (b *Bot) villageRemove(req *request) {
 	if len(removed) > 0 {
 		reply += ": " + strings.Join(sortedNames(removed), ", ")
 	}
-	if len(skipped) > 0 {
-		reply += "\nSkipped: " + strings.Join(skipped, ", ")
-	}
-	b.replyWithRoleWarning(req, reply, roleErr)
+	b.replyWithRoleWarning(req, reply+listLine("Skipped", skipped), roleErr)
 }
 
 // villageList replies with the current players, numbered and sorted by name.

@@ -46,6 +46,6 @@ Rules shared by every command: how messages are recognised as commands, and how 
 
 ## Implementation
 
-- `newMessage` in [internal/bot/bot.go](../../internal/bot/bot.go), and `interaction` for slash commands in [internal/bot/interactions.go](../../internal/bot/interactions.go). Both build a `request`. The `commands` table, `extractCommand` and `allowed` (the access check) in [internal/bot/commands.go](../../internal/bot/commands.go).
+- `newMessage` in [internal/bot/bot.go](../../internal/bot/bot.go), and `interaction` for slash commands in [internal/bot/interactions.go](../../internal/bot/interactions.go). Both build a `request`. The `commands` table, `runCommand` and `allowed` (the access check) in [internal/bot/commands.go](../../internal/bot/commands.go).
 - Each command's table entry sets its access: `beforeGame` (runs for anyone, anywhere, with no game: `register`, `start`, `ping`) and `anyChannel` (the Storyteller can run it anywhere: `ping`). `allowed` is pure and tested in `commands_test.go`.
 - Message content is never logged, because whispers and character guidance are secret. Send failures are logged by the `reply`/`send` helpers.

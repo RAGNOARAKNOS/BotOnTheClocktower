@@ -4,6 +4,8 @@ import (
 	"maps"
 	"slices"
 	"testing"
+
+	"github.com/bwmarrin/discordgo"
 )
 
 // testGame returns a game with two village players, Alice (with a character) and Bob (without).
@@ -38,6 +40,38 @@ func TestRemovePlayer(t *testing.T) {
 	}
 	if _, ok := g.Characters["a"]; ok {
 		t.Error("removed player kept their character")
+	}
+}
+
+func TestAddPlayerAndClearCharacter(t *testing.T) {
+	g := testGame()
+	g.AddPlayer("c", "Carol")
+	if g.Players["c"] != "Carol" {
+		t.Errorf("Players[c] = %q, want Carol", g.Players["c"])
+	}
+
+	g.ClearCharacter("a")
+	if _, ok := g.Characters["a"]; ok {
+		t.Error("cleared character still there")
+	}
+	if g.Players["a"] != "Alice" {
+		t.Error("clearing a character removed the player from the village")
+	}
+}
+
+func TestMarkSent(t *testing.T) {
+	g := testGame()
+	g.MarkSent("a")
+	if !g.Characters["a"].Sent {
+		t.Error("character not marked sent")
+	}
+}
+
+func TestSortedPlayerIDs(t *testing.T) {
+	g := testGame()
+	g.AddPlayer("c", "Aaron")
+	if got, want := g.sortedPlayerIDs(), []string{"c", "a", "b"}; !slices.Equal(got, want) {
+		t.Errorf("sortedPlayerIDs() = %v, want %v", got, want)
 	}
 }
 
@@ -120,5 +154,21 @@ func TestVillageChannels(t *testing.T) {
 	g.Rooms = map[string]string{"TS": "town", "TW": "tower", "CA": "cathedral"}
 	if got, want := g.villageChannels(), []string{"town", "cathedral", "tower"}; !slices.Equal(got, want) {
 		t.Errorf("mapped: villageChannels() = %v, want %v", got, want)
+	}
+}
+
+func TestVillageRooms(t *testing.T) {
+	voice, text, category := discordgo.ChannelTypeGuildVoice, discordgo.ChannelTypeGuildText, discordgo.ChannelTypeGuildCategory
+	channels := []*discordgo.Channel{
+		{ID: "cat", Name: "Tower", Type: category},
+		{ID: "chat", Name: "Tower", Type: text},
+		{ID: "town", Name: "Town Square", Type: voice},
+		{ID: "tower", Name: "Tower", Type: voice},
+		{ID: "tower2", Name: "Tower", Type: voice},
+		{ID: "general", Name: "General", Type: voice},
+	}
+	want := map[string]string{"TS": "town", "TW": "tower"}
+	if got := villageRooms(channels); !maps.Equal(got, want) {
+		t.Errorf("villageRooms() = %v, want %v", got, want)
 	}
 }

@@ -8,6 +8,8 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
+const whisperUsage = "Usage: `!botc whisper @player <text>` (the text can span several lines)"
+
 // whisper DMs a village player a secret message from the Storyteller straight away.
 func (b *Bot) whisper(req *request) {
 	userID, text, err := parseWhisper(req.content)

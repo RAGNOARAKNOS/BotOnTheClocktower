@@ -100,7 +100,7 @@ flowchart TD
     skip --> next
     mark --> next
     next -->|"[no more mentions]"| role("setPlayerRole: give BoTC-Player<br/>to the players being added")
-    role --> store("Add them to Game.Players")
+    role --> store("Game.AddPlayer for each")
     store --> reply("Reply: Added N player(s), who was skipped,<br/>and any role warning")
     usage --> done(((" "))):::final
     reply --> done
@@ -132,4 +132,4 @@ flowchart TD
 
 ---
 
-Last checked against code: 2026-09-27 (b1fa7f3)
+Last checked against code: 2026-09-27 (f7831d7)

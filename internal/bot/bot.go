@@ -1,6 +1,7 @@
 package bot
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -11,6 +12,8 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 )
+
+const panicReply = "Something went wrong running that command. Check the bot's logs."
 
 type Bot struct {
 	// mu serialises command handling. discordgo runs each event handler in its
@@ -28,7 +31,9 @@ func Run(token string) error {
 		return err
 	}
 
-	discord.Identify.Intents = discordgo.IntentsAll
+	// Server Members and Message Content are privileged: enable them in the developer portal.
+	discord.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMembers | discordgo.IntentsGuildVoiceStates |
+		discordgo.IntentsGuildMessages | discordgo.IntentsDirectMessages | discordgo.IntentsMessageContent
 
 	b := &Bot{discord: discord}
 
@@ -62,19 +67,26 @@ func (b *Bot) newMessage(discord *discordgo.Session, message *discordgo.MessageC
 		return
 	}
 
+	b.locked(fmt.Sprintf("command %q", msgContents[1]),
+		func() { b.reply(message, panicReply) },
+		func() { b.runCommand(b.messageRequest(message, msgContents)) })
+}
+
+// locked runs a command or timer step under Bot.mu, recovering from a panic so the
+// game isn't lost. Only name is logged, as the rest can hold game secrets.
+func (b *Bot) locked(name string, onPanic func(), run func()) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	// A panic in a handler would otherwise crash the whole bot and lose the game.
 	defer func() {
 		if r := recover(); r != nil {
-			// Log the command name only: the rest of the message can hold game secrets.
-			log.Printf("Recovered from panic handling %q: %v\n%s", msgContents[1], r, debug.Stack())
-			b.reply(message, "Something went wrong running that command. Check the bot's logs.")
+			log.Printf("Recovered from panic in %s: %v\n%s", name, r, debug.Stack())
+			if onPanic != nil {
+				onPanic()
+			}
 		}
 	}()
-
-	b.extractCommand(b.messageRequest(message, msgContents))
+	run()
 }
 
 // messageRequest turns a `!botc` message into a request. Replies are threaded to the message.

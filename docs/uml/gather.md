@@ -4,7 +4,7 @@
 
 `!botc gather` starts a countdown, announces it, warns again 30 seconds before the end, then moves the players into Town Square. Covers `gather`, `parseGather`, `gatherCancel`, `gatherFire`, `gatherWarn`, `gatherMove` and `gatherAnnounce` in [internal/bot/gather.go](../../internal/bot/gather.go), and `Game.villageChannels` in [internal/bot/game.go](../../internal/bot/game.go).
 
-The command has already passed [`allowed`](command-dispatch.md#activity-allowed), so a game is registered and the Storyteller sent it from the admin channel. The warning and the move run later, from `time.AfterFunc` timers in their own goroutines. `gatherFire` makes each one take `Bot.mu` like a command, and do nothing if the game was unregistered or replaced, or the countdown cancelled, in the meantime.
+The command has already passed [`allowed`](command-dispatch.md#activity-allowed), so a game is registered and the Storyteller sent it from the admin channel. The warning and the move run later, from `time.AfterFunc` timers in their own goroutines. `gatherFire` runs each one through `locked`, so it takes `Bot.mu` like a command, and does nothing if the game was unregistered or replaced, or the countdown cancelled, in the meantime.
 
 ## Activity: `gather`
 
@@ -139,4 +139,4 @@ sequenceDiagram
 
 ---
 
-Last checked against code: 2026-09-27 (b661eed)
+Last checked against code: 2026-09-27 (f7831d7)

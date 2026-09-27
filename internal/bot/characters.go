@@ -3,7 +3,6 @@ package bot
 import (
 	"fmt"
 	"log"
-	"slices"
 	"strings"
 )
 
@@ -31,18 +30,13 @@ type Character struct {
 }
 
 const (
-	// maxEmbedDescription is Discord's limit on an embed's description.
-	maxEmbedDescription = 4096
 	// maxCharacterName keeps "Your character: <name> (<team>)" within Discord's 256-character embed title limit.
 	maxCharacterName = 200
-	// maxMessageLength is Discord's limit on a message's content.
-	maxMessageLength = 2000
 
 	characterUsage = "Usage: `!botc character assign @player [good|evil] <Character>` (guidance on the following lines), " +
 		"`!botc character team @player good|evil`, `!botc character kill @player...`, `!botc character revive @player...`, " +
 		"`!botc character ghostvote @player...`, `!botc character announce`, `!botc character clear @player...`, " +
 		"`!botc character list` (or `!botc grimoire`), `!botc character send [@player...]`"
-	whisperUsage = "Usage: `!botc whisper @player <text>` (the text can span several lines)"
 )
 
 // characterCommands maps each character subcommand to its handler.
@@ -118,10 +112,7 @@ func (b *Bot) characterTeam(req *request) {
 	if len(changed) > 0 {
 		reply += ": " + strings.Join(changed, ", ") + ". Not told yet; use `!botc character send` to send them their updated character."
 	}
-	if len(skipped) > 0 {
-		reply += "\nSkipped: " + strings.Join(skipped, ", ")
-	}
-	req.reply(reply)
+	req.reply(reply + listLine("Skipped", skipped))
 }
 
 // characterSetAlive kills or revives the mentioned players. Nothing is posted
@@ -151,10 +142,7 @@ func (b *Bot) characterSetAlive(req *request, alive bool) {
 	if len(changed) > 0 {
 		reply += ": " + strings.Join(changed, ", ")
 	}
-	reply += "."
-	if len(skipped) > 0 {
-		reply += "\nSkipped: " + strings.Join(skipped, ", ")
-	}
+	reply += "." + listLine("Skipped", skipped)
 	died, revived := b.game.PendingLifeChanges()
 	if pending := len(died) + len(revived); pending > 0 {
 		reply += fmt.Sprintf("\n%d change(s) waiting to be announced; use `!botc character announce`.", pending)
@@ -185,10 +173,7 @@ func (b *Bot) characterGhostVote(req *request) {
 	if len(changed) > 0 {
 		reply = strings.Join(changed, "\n")
 	}
-	if len(skipped) > 0 {
-		reply += "\nSkipped: " + strings.Join(skipped, ", ")
-	}
-	req.reply(reply)
+	req.reply(reply + listLine("Skipped", skipped))
 }
 
 // characterAnnounce posts the deaths and revivals since the last announcement in
@@ -226,43 +211,18 @@ func (b *Bot) characterClear(req *request) {
 		return
 	}
 
-	var cleared, skipped []string
-	for _, user := range req.mentions {
-		if _, ok := b.game.Characters[user.ID]; !ok {
-			skipped = append(skipped, user.Username)
-			continue
-		}
-		delete(b.game.Characters, user.ID)
-		cleared = append(cleared, b.playerName(user.ID, user.Username))
+	ids, skipped := b.mentionedCharacters(req)
+	var cleared []string
+	for _, id := range ids {
+		b.game.ClearCharacter(id)
+		cleared = append(cleared, b.game.Players[id])
 	}
 
 	reply := fmt.Sprintf("Cleared %d character(s)", len(cleared))
 	if len(cleared) > 0 {
 		reply += ": " + strings.Join(cleared, ", ")
 	}
-	if len(skipped) > 0 {
-		reply += "\nNo character to clear: " + strings.Join(skipped, ", ")
-	}
-	req.reply(reply)
-}
-
-// pendingLifeChanges returns the names of village players who have died or
-// come back to life since the last announcement, each sorted by name.
-func pendingLifeChanges(players map[string]string, chars map[string]*Character) (died, revived []string) {
-	for id, name := range players {
-		c, ok := chars[id]
-		if !ok || c.Alive == c.AnnouncedAlive {
-			continue
-		}
-		if c.Alive {
-			revived = append(revived, name)
-		} else {
-			died = append(died, name)
-		}
-	}
-	slices.Sort(died)
-	slices.Sort(revived)
-	return died, revived
+	req.reply(reply + listLine("Skipped", skipped))
 }
 
 // mentionedCharacters returns the IDs of the mentioned players who have a
@@ -272,7 +232,7 @@ func (b *Bot) mentionedCharacters(req *request) (ids, skipped []string) {
 		if _, ok := b.game.Characters[user.ID]; ok {
 			ids = append(ids, user.ID)
 		} else {
-			skipped = append(skipped, b.playerName(user.ID, user.Username)+" (no character)")
+			skipped = append(skipped, b.game.playerName(user.ID, user.Username)+" (no character)")
 		}
 	}
 	return ids, skipped
@@ -283,15 +243,9 @@ func (b *Bot) mentionedCharacters(req *request) (ids, skipped []string) {
 func (b *Bot) characterSend(req *request) {
 	var targets, skipped []string
 	if len(req.mentions) > 0 {
-		for _, user := range req.mentions {
-			if _, ok := b.game.Characters[user.ID]; ok {
-				targets = append(targets, user.ID)
-			} else {
-				skipped = append(skipped, user.Username)
-			}
-		}
+		targets, skipped = b.mentionedCharacters(req)
 	} else {
-		for _, id := range b.sortedPlayerIDs() {
+		for _, id := range b.game.sortedPlayerIDs() {
 			if c, ok := b.game.Characters[id]; ok && !c.Sent {
 				targets = append(targets, id)
 			}
@@ -302,18 +256,18 @@ func (b *Bot) characterSend(req *request) {
 	for _, id := range targets {
 		c := b.game.Characters[id]
 		embed := b.dmEmbed(fmt.Sprintf("Your character: %s (%s)", c.Name, c.Team), c.Guidance)
-		name := b.playerName(id, id)
+		name := b.game.Players[id]
 		if err := b.sendDM(id, embed); err != nil {
 			log.Printf("Could not DM %s their character: %v", id, err)
 			failed = append(failed, fmt.Sprintf("%s (%s)", name, dmErrorReason(err)))
 			continue
 		}
-		c.Sent = true
+		b.game.MarkSent(id)
 		sent = append(sent, name)
 	}
 
 	var missing []string
-	for _, id := range b.sortedPlayerIDs() {
+	for _, id := range b.game.sortedPlayerIDs() {
 		if _, ok := b.game.Characters[id]; !ok {
 			missing = append(missing, b.game.Players[id])
 		}
@@ -329,33 +283,7 @@ func (b *Bot) characterSend(req *request) {
 		}
 	}
 	if len(failed) > 0 {
-		reply += "\nFailed: " + strings.Join(failed, ", ") + ". Fix the problem and run `!botc character send` again."
+		reply += listLine("Failed", failed) + ". Fix the problem and run `!botc character send` again."
 	}
-	if len(skipped) > 0 {
-		reply += "\nNo character assigned: " + strings.Join(skipped, ", ")
-	}
-	if len(missing) > 0 {
-		reply += "\nVillage players with no character yet: " + strings.Join(missing, ", ")
-	}
-	req.reply(reply)
-}
-
-// playerName returns the village name for the user, or fallback if they aren't in the village.
-func (b *Bot) playerName(userID, fallback string) string {
-	if name, ok := b.game.Players[userID]; ok {
-		return name
-	}
-	return fallback
-}
-
-// sortedPlayerIDs returns the village players' IDs, ordered by display name.
-func (b *Bot) sortedPlayerIDs() []string {
-	ids := make([]string, 0, len(b.game.Players))
-	for id := range b.game.Players {
-		ids = append(ids, id)
-	}
-	slices.SortFunc(ids, func(a, c string) int {
-		return strings.Compare(b.game.Players[a], b.game.Players[c])
-	})
-	return ids
+	req.reply(reply + listLine("Skipped", skipped) + listLine("Village players with no character yet", missing))
 }

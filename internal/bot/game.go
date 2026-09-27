@@ -1,10 +1,11 @@
 package bot
 
 import (
-	"fmt"
-	"log"
 	"maps"
 	"slices"
+	"strings"
+
+	"github.com/bwmarrin/discordgo"
 )
 
 // Game is the state of the registered game. It's held in memory only, so a restart loses it.
@@ -50,6 +51,11 @@ func (g *Game) ReplacePlayers(players map[string]string) (dropped map[string]str
 	return dropped
 }
 
+// AddPlayer puts a player in the village.
+func (g *Game) AddPlayer(userID, name string) {
+	g.Players[userID] = name
+}
+
 // RemovePlayer takes a player out of the village, with their character.
 func (g *Game) RemovePlayer(userID string) {
 	delete(g.Players, userID)
@@ -69,6 +75,16 @@ func (g *Game) Assign(userID string, c *Character) (previous *Character) {
 	}
 	g.Characters[userID] = c
 	return previous
+}
+
+// ClearCharacter removes a player's character; they stay in the village.
+func (g *Game) ClearCharacter(userID string) {
+	delete(g.Characters, userID)
+}
+
+// MarkSent records that a player has been sent their character.
+func (g *Game) MarkSent(userID string) {
+	g.Characters[userID].Sent = true
 }
 
 // SetTeam moves a player's character to team and marks it unsent, so `send` tells
@@ -109,9 +125,23 @@ func (g *Game) ToggleGhostVote(userID string) bool {
 	return true
 }
 
-// PendingLifeChanges returns who has died or come back since the last announcement.
+// PendingLifeChanges returns the names of the players who have died or come back
+// since the last announcement, each sorted by name.
 func (g *Game) PendingLifeChanges() (died, revived []string) {
-	return pendingLifeChanges(g.Players, g.Characters)
+	for id, name := range g.Players {
+		c, ok := g.Characters[id]
+		if !ok || c.Alive == c.AnnouncedAlive {
+			continue
+		}
+		if c.Alive {
+			revived = append(revived, name)
+		} else {
+			died = append(died, name)
+		}
+	}
+	slices.Sort(died)
+	slices.Sort(revived)
+	return died, revived
 }
 
 // MarkAnnounced records every character's current life state as announced.
@@ -133,6 +163,21 @@ func (g *Game) villageChannels() []string {
 	return channels
 }
 
+// playerName returns the player's village name, or fallback if they aren't in the village.
+func (g *Game) playerName(userID, fallback string) string {
+	if name, ok := g.Players[userID]; ok {
+		return name
+	}
+	return fallback
+}
+
+// sortedPlayerIDs returns the village players' IDs, ordered by display name.
+func (g *Game) sortedPlayerIDs() []string {
+	return slices.SortedFunc(maps.Keys(g.Players), func(a, b string) int {
+		return strings.Compare(g.Players[a], g.Players[b])
+	})
+}
+
 var villageCodeLookup = map[string]string{
 	"TS": "Town Square",
 	"CA": "Cathedral",
@@ -143,95 +188,19 @@ var villageCodeLookup = map[string]string{
 	"SC": "Storyteller's Corner",
 }
 
-func (b *Bot) register(req *request) {
-	if b.game != nil {
-		reply := fmt.Sprintf("A game is already registered, with <@%s> as the Storyteller. This command will not execute", b.game.StorytellerID)
-		req.reply(reply)
-		return
-	}
-
-	townSquareName := villageCodeLookup["TS"]
-	gameChannelID, err := b.findVoiceChannelID(req.guildID, townSquareName)
-	if err != nil {
-		reply := fmt.Sprintf("Could not find the game channel (%v). Create a voice channel named %q, then try again. This command will not execute", err, townSquareName)
-		req.reply(reply)
-		return
-	}
-
-	b.game = newGame(req.guildID, req.channelID, gameChannelID, req.authorID)
-
-	log.Printf("The game has been registered at %s admin channel %s game channel %s storyteller %s", b.game.GuildID, b.game.AdminChannelID, b.game.GameChannelID, b.game.StorytellerID)
-
-	b.send(b.game.GameChannelID, fmt.Sprintf("A new game has begun. <@%s> is the Storyteller.", b.game.StorytellerID))
-
-	reply := fmt.Sprintf("Game registered. <@%s> is the Storyteller. This is the admin channel; <#%s> is the game channel.", b.game.StorytellerID, b.game.GameChannelID)
-	if err := b.assignStorytellerRole(b.game.GuildID, b.game.StorytellerID); err != nil {
-		log.Printf("Could not assign the %s role: %v", storytellerRoleName, err)
-		reply += fmt.Sprintf(" Warning: could not assign the %q role (%v). Check the role exists and sits below the bot's role.", storytellerRoleName, err)
-	}
-	// Missing channel permissions make the bot silently ignore commands, so warn now.
-	if warning := b.channelAccessWarning(b.game.GuildID, b.game.AdminChannelID, b.game.GameChannelID); warning != "" {
-		log.Printf("The bot is missing channel permissions: %s", warning)
-		reply += warning
-	}
-	req.reply(reply)
-}
-
-// unregister ends the current game: it removes the game roles from everyone
-// and forgets the game so a new one can be registered.
-func (b *Bot) unregister(req *request) {
-	guildID := b.game.GuildID
-
-	removed, roleErr := b.removeGameRoles(guildID)
-
-	b.send(b.game.GameChannelID, "The game has ended. Thanks for playing!")
-
-	if b.game.gather != nil {
-		b.game.gather.stop()
-	}
-	b.game = nil
-
-	log.Printf("The game at %s has been unregistered, %d game roles removed", guildID, removed)
-
-	reply := fmt.Sprintf("Game ended. Removed %d game role(s).", removed)
-	if roleErr != nil {
-		log.Printf("Problems removing game roles: %v", roleErr)
-		reply += fmt.Sprintf(" Warning: some roles could not be removed (%v). Check the %q and %q roles exist and sit below the bot's role.", roleErr, storytellerRoleName, playerRoleName)
-	}
-	req.reply(reply)
-}
-
-// sitrep reports where the game is running. It only runs while a game is registered.
-func (b *Bot) sitrep(req *request) {
-	req.say(fmt.Sprintf("SITREP-Game is initialised at guildid# %s admin channel <#%s> game channel <#%s> storyteller <@%s>", b.game.GuildID, b.game.AdminChannelID, b.game.GameChannelID, b.game.StorytellerID))
-}
-
-// mapCommand runs `!botc map`, replying if the channels couldn't be read.
-func (b *Bot) mapCommand(req *request) {
-	if err := b.mapRooms(); err != nil {
-		log.Printf("Could not map rooms: %v", err)
-		req.reply(fmt.Sprintf("Could not map the town's channels (%v)", err))
-	}
-}
-
-// mapRooms records the IDs of the channels named in villageCodeLookup in Game.Rooms.
-func (b *Bot) mapRooms() error {
-	allChans, err := b.getMapGuildChannels(b.game.GuildID)
-	if err != nil {
-		return err
-	}
-
-	b.game.Rooms = make(map[string]string)
-	for index, ch := range allChans {
-		for code, room := range villageCodeLookup {
-			if room == ch {
-				b.game.Rooms[code] = index
+// villageRooms maps each room code to the first voice channel with the room's name,
+// the same rule findVoiceChannelID uses, so Town Square matches the game channel.
+func villageRooms(channels []*discordgo.Channel) map[string]string {
+	rooms := make(map[string]string)
+	for _, ch := range channels {
+		if ch.Type != discordgo.ChannelTypeGuildVoice {
+			continue
+		}
+		for code, name := range villageCodeLookup {
+			if _, found := rooms[code]; !found && ch.Name == name {
+				rooms[code] = ch.ID
 			}
 		}
 	}
-
-	if _, err := b.discord.ChannelMessageSendTTS(b.game.AdminChannelID, "Town Locations Mapped"); err != nil {
-		log.Printf("Could not post in channel %s: %v", b.game.AdminChannelID, err)
-	}
-	return nil
+	return rooms
 }

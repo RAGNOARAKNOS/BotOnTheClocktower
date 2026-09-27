@@ -68,7 +68,7 @@ flowchart TD
     rv -->|"[kill]"| next
     ghost --> next
     skip --> next
-    next -->|"[no more mentions]"| pend("pendingLifeChanges: players whose<br/>Alive differs from AnnouncedAlive")
+    next -->|"[no more mentions]"| pend("Game.PendingLifeChanges: players whose<br/>Alive differs from AnnouncedAlive")
     pend --> reply("Reply: Now dead / alive: N player(s), who was skipped,<br/>and how many changes are waiting to be announced")
     usage --> done(((" "))):::final
     reply --> done
@@ -123,7 +123,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    start((" ")):::initial --> pend("pendingLifeChanges")
+    start((" ")):::initial --> pend("Game.PendingLifeChanges")
     pend --> d1{" "}
     d1 -->|"[nothing pending]"| none("Reply: Nothing to announce")
     d1 -->|"[deaths or revivals]"| build("Build the lines, sorted by name:<br/>X has died. / Y has returned to life.")
@@ -151,7 +151,7 @@ sequenceDiagram
     actor Town as Town Square chat
 
     ST->>Bot: !botc character announce
-    Note over Bot: pendingLifeChanges(Players, Characters)
+    Note over Bot: Game.PendingLifeChanges()
     alt nothing pending
         Bot->>REST: Reply "Nothing to announce..."
     else deaths or revivals pending
@@ -183,7 +183,7 @@ sequenceDiagram
 
     ST->>Bot: !botc character send (optionally @player...)
     alt players mentioned
-        Note over Bot: Targets = the mentioned players with a character<br/>(the others are reported as having none)
+        Note over Bot: Targets = the mentioned players with a character<br/>(mentionedCharacters: the others are skipped, with no character)
     else no mentions
         Note over Bot: Targets = village players with an unsent character, by name
     end
@@ -194,13 +194,13 @@ sequenceDiagram
         Bot->>REST: ChannelMessageSendEmbed(DM, "Your character: Name (Team)", guidance)
         alt delivered
             REST-->>P: Character DM
-            Note over Bot: Sent = true
+            Note over Bot: Game.MarkSent: Sent = true
         else either call failed
             REST-->>Bot: Error
             Note over Bot: Still unsent. dmErrorReason explains,<br/>e.g. they don't accept DMs from this server.
         end
     end
-    Bot->>REST: Reply "Sent N character(s)...", then Failed, No character assigned,<br/>and Village players with no character yet
+    Bot->>REST: Reply "Sent N character(s)...", then Failed, Skipped,<br/>and Village players with no character yet
     REST-->>ST: Reply in the admin channel
 ```
 
@@ -259,4 +259,4 @@ sequenceDiagram
 
 ---
 
-Last checked against code: 2026-09-27 (4bef1c8)
+Last checked against code: 2026-09-27 (f7831d7)

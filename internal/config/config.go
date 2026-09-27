@@ -22,5 +22,9 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 
-	return Config{Token: os.Getenv("BOTAPIKEY")}, nil
+	token := os.Getenv("BOTAPIKEY")
+	if token == "" {
+		return Config{}, errors.New("BOTAPIKEY is not set: put the Discord bot token in the environment or in a .env file")
+	}
+	return Config{Token: token}, nil
 }

@@ -14,7 +14,7 @@ Find the village's voice channels so later commands can move players between the
 
 Steps:
 
-1. Find the server's channels whose names exactly match the village locations, and record their IDs:
+1. Find the server's voice channels whose names exactly match the village locations, and record their IDs (the first, if several share a name):
 
    | Code | Channel name |
    | --- | --- |
@@ -36,6 +36,7 @@ Steps:
 ## Rules & edge cases
 
 - Missing locations are skipped silently.
+- Only voice channels count: a text channel or category with a location's name is ignored.
 - If mapping fails (e.g. a Discord error), the bot replies with the error.
 
 ## Done when
@@ -54,9 +55,9 @@ Steps:
 - 2026-09-26: `map` no longer lists or touches players. The player list is built by `!botc village create` ([village-management.md](village-management.md)), and `map` used to wipe it.
 - 2026-09-26: Storyteller only, from the admin channel, like every command (was: anyone, anywhere). With no game registered it's now ignored rather than replying "No game registered".
 - 2026-09-27: No "Cottage-XX" channels. The village is just the rooms in `villageCodeLookup`, and the planned `bedtime` command, which relied on cottages, is dropped.
+- 2026-09-27: Only voice channels are matched, and the first with each name wins, the same rule `register` uses to find Town Square. So `Rooms["TS"]` is always the game channel.
 
 ## Implementation
 
-- `mapRooms`, `villageCodeLookup` in [internal/bot/game.go](../../internal/bot/game.go); `getMapGuildChannels` in [internal/bot/discord.go](../../internal/bot/discord.go).
-- Known gaps:
-  - Matching ignores channel type. If a category or text channel shares a name, or two channels share a name, the recorded ID is unpredictable. `Rooms["TS"]` could differ from the game channel `register` chose.
+- `mapRooms` in [internal/bot/lifecycle.go](../../internal/bot/lifecycle.go); `villageRooms` (the matching, tested in `game_test.go`) and `villageCodeLookup` in [internal/bot/game.go](../../internal/bot/game.go).
+- Known gap: it doesn't report which locations were found or missing (see Open questions).

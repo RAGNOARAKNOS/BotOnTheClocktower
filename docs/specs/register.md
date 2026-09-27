@@ -76,5 +76,5 @@ Steps:
 
 ## Implementation
 
-- `register`, `newGame` in [internal/bot/game.go](../../internal/bot/game.go); `findVoiceChannelID` in [internal/bot/discord.go](../../internal/bot/discord.go); `assignStorytellerRole`, `findRoleID` in [internal/bot/roles.go](../../internal/bot/roles.go); `channelAccessWarning`, `missingPermissions` in [internal/bot/permissions.go](../../internal/bot/permissions.go).
+- `register` in [internal/bot/lifecycle.go](../../internal/bot/lifecycle.go); `newGame` in [internal/bot/game.go](../../internal/bot/game.go); `findVoiceChannelID` in [internal/bot/discord.go](../../internal/bot/discord.go); `assignStorytellerRole`, `findRoleID` in [internal/bot/roles.go](../../internal/bot/roles.go); `channelAccessWarning`, `missingPermissions` in [internal/bot/permissions.go](../../internal/bot/permissions.go).
 - State is in memory only, so a restart forgets the game (but not the roles it gave out).

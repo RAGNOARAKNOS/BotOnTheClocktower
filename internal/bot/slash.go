@@ -17,8 +17,6 @@ const (
 	slashCommandName = "botc"
 	// modalPrefix starts the CustomID of every form the bot opens.
 	modalPrefix = "botc|"
-	// maxTextInput is Discord's limit on a form's text box.
-	maxTextInput = 4000
 )
 
 // slashOption builds an option; the helpers below cover the kinds /botc uses.
@@ -220,12 +218,4 @@ func modalFields(data discordgo.ModalSubmitInteractionData) map[string]string {
 		}
 	}
 	return fields
-}
-
-// truncate shortens s to at most n characters.
-func truncate(s string, n int) string {
-	if r := []rune(s); len(r) > n {
-		return string(r[:n])
-	}
-	return s
 }
